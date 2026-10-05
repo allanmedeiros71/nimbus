@@ -344,3 +344,76 @@ def test_compilation_falls_back_to_folder_image(tmp_path):
                                 store=TrackStore(tmp_path / "t.json"))
     out = resolver.resolve(COMPILATION[0], None, siblings=COMPILATION)
     assert out.cover == b"CAPA DA PASTA" and out.cover_source == "pasta"
+
+
+def test_recording_search_falls_back_to_looser_queries(tmp_path):
+    from nimbus.metadata import TrackInfo
+
+    class Picky(FakeHttp):
+        def get(self, url, headers=None):
+            self.urls.append(url)
+            from urllib.parse import unquote
+            q = unquote(url)
+            if "/recording?" in url and "artist:(Legiao Urbana)" in q:
+                return json.dumps({"recordings": [{"score": 90, "title": "Tempo Perdido",
+                                                    "releases": [{"id": "r", "title": "Dois", "status": "Official",
+                                                                  "release-group": {"id": "rg", "primary-type": "Album"}}]}]}).encode()
+            if "/recording?" in url:
+                return b'{"recordings": []}'
+            return b'{}'
+
+    online = OnlineLookup(http=Picky({}), cache=tmp_path)
+    r = online.lookup(TrackInfo(title="TEMPO PERDIDO", artist="Legiao Urbana", album="100 Mais Pop&Rock Brasil"))
+    assert r is not None and r.album == "Dois"
+
+
+def test_online_note_explains_missing_cover(tmp_path):
+    from nimbus.metadata import TrackStore
+
+    class Down(FakeHttp):
+        def get(self, url, headers=None):
+            raise OSError("certificate verify failed")
+
+    files = {"a1": b"RIFF" + b"\0" * 100, "img": b"CAPA DA PASTA"}
+    resolver = MetadataResolver(lambda: "t", online=OnlineLookup(http=Down({}), cache=tmp_path),
+                                covers=CoverCache(tmp_path / "c"), fetcher=lambda fid: fetcher_for(files[fid]),
+                                store=TrackStore(tmp_path / "t.json"))
+    out = resolver.resolve(COMPILATION[0], None, siblings=COMPILATION)
+    assert out.cover_source == "pasta"
+    assert out.note.startswith("internet: erro (certificate verify failed")
+
+
+def test_store_cover_when_cover_art_archive_unreachable(tmp_path):
+    from nimbus.metadata import TrackStore
+
+    class CaaDown(FakeHttp):
+        def get(self, url, headers=None):
+            if "coverartarchive" in url:
+                raise OSError("[Errno 111] Connection refused")
+            return super().get(url, headers)
+
+    http = CaaDown({
+        "/recording?": {"recordings": [{"score": 100, "title": "A Via Láctea", "first-release-date": "1996",
+                                         "releases": [{"id": "rel", "title": "A Tempestade", "status": "Official",
+                                                       "release-group": {"id": "rg", "primary-type": "Album"}}]}]},
+        "itunes.apple.com/search": {"results": [
+            {"artistName": "Outro Artista", "artworkUrl100": "https://img/errada/100x100bb.jpg"},
+            {"artistName": "Legião Urbana", "artworkUrl100": "https://img/certa/100x100bb.jpg"}]},
+        "img/certa/300x300bb.jpg": b"CAPA ITUNES",
+    })
+    files = {"a3": b"RIFF" + b"\0" * 100, "img": b"CAPA DA PASTA"}
+    store = TrackStore(tmp_path / "t.json")
+    resolver = MetadataResolver(lambda: "t", online=OnlineLookup(http=http, cache=tmp_path),
+                                covers=CoverCache(tmp_path / "c"), fetcher=lambda fid: fetcher_for(files[fid]),
+                                store=store)
+    item = DriveItem("a7", "07 Legiao Urbana - A VIA LACTEA.mp3", "audio/mpeg")
+    files["a7"] = files["a3"]
+    out = resolver.resolve(item, None, siblings=COMPILATION)
+    assert (out.cover, out.cover_source, out.note) == (b"CAPA ITUNES", "itunes", "")
+    assert store.get("a7")["complete"] is True
+
+
+def test_same_name():
+    from nimbus.metadata import _same_name
+    assert _same_name("Legião Urbana", "LEGIAO URBANA")
+    assert not _same_name("Legião Urbana", "Titãs")

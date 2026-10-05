@@ -295,6 +295,7 @@ class NimbusApp(App):
         self.state: dict = {"pause": False, "volume": None, "mute": False, "time-pos": None, "duration": None}
         self.info = TrackInfo()
         self.cover_source = ""
+        self.online_note = ""
         self.playing_id: Optional[str] = None
         self._marked_id: Optional[str] = None
         self._gen = 0
@@ -447,6 +448,8 @@ class NimbusApp(App):
 
     def _preview_folder(self, node: TreeNode) -> None:
         """Cursor parou numa pasta: local mostra já; remota só se já foi listada ou aberta."""
+        if not self.is_running or not self.screen.query(TrackTable):
+            return  # o timer disparou com a interface fechando
         item: DriveItem = node.data
         if not self.is_remote(item) or item.id in self._listings or item.id in self._opened:
             self._show_folder(node)
@@ -575,6 +578,7 @@ class NimbusApp(App):
         if item is not None:
             self.info = self.resolver.basic(item, None, self.play_folder.name if self.play_folder else "")
         self.cover_source = ""
+        self.online_note = ""
         self._pending_cover = (self._gen, None)
 
     def _control(self, fn: Callable[[Controller], None], changes_track: bool = False) -> None:
@@ -707,6 +711,7 @@ class NimbusApp(App):
                 return
             self.info = resolved.info
             self.cover_source = resolved.cover_source if image is not None else ""
+            self.online_note = resolved.note
             self._pending_cover = (gen, image)
 
         threading.Thread(target=run, name="nimbus-meta", daemon=True).start()
@@ -769,6 +774,8 @@ class NimbusApp(App):
             src = "dados: " + "+".join(sources)
         if self.cover_source:
             src += ("  ·  " if src else "") + "capa: " + self.cover_source
+        if self.online_note and self.playing_id:
+            src += ("  ·  " if src else "") + self.online_note
         self.query_one("#pb-source", Static).update(Text(src))
 
         pos = state.get("time-pos") if self.playing_id and not finished else None

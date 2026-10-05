@@ -108,7 +108,7 @@ O nimbus usa, nesta ordem, o que estiver disponível:
 2. O nome do arquivo (`01 - Artista - Título.mp3`) e da pasta, quando faltam tags.
 3. A capa embutida no MP3 ou FLAC. Só o começo do arquivo é lido, onde a capa fica.
 4. Uma imagem na mesma pasta do Drive (`cover.jpg`, `folder.png`, `capa.jpg`…).
-5. [MusicBrainz](https://musicbrainz.org) para completar álbum, ano e gênero, e o [Cover Art Archive](https://coverartarchive.org) para a capa. Só artista, título e álbum são enviados. Use `--offline` ou `NIMBUS_OFFLINE=1` para desligar.
+5. [MusicBrainz](https://musicbrainz.org) para completar álbum, ano e gênero, e o [Cover Art Archive](https://coverartarchive.org) para a capa. Se o Cover Art Archive não tiver a capa ou não for acessível na sua rede, a busca pública do iTunes e, depois, a do Deezer servem de reserva. Só artista, título e álbum são enviados. Use `--offline` ou `NIMBUS_OFFLINE=1` para desligar.
 
 Em coletâneas (pastas com faixas de artistas diferentes, pelo nome dos arquivos) a capa vem primeiro do disco original de cada música no Cover Art Archive; a capa embutida e a imagem da pasta ficam como reserva, já que costumam ser iguais em todas as faixas.
 
