@@ -441,6 +441,8 @@ class NimbusApp(App):
 
     def _preview_folder(self, node: TreeNode) -> None:
         """Cursor parou numa pasta: local mostra já; remota só se já foi listada ou aberta."""
+        if not self.is_running or not self.screen.query(TrackTable):
+            return  # o timer disparou com a interface fechando
         item: DriveItem = node.data
         if not self.is_remote(item) or item.id in self._listings or item.id in self._opened:
             self._show_folder(node)

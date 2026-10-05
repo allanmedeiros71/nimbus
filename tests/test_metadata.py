@@ -381,3 +381,39 @@ def test_online_note_explains_missing_cover(tmp_path):
     out = resolver.resolve(COMPILATION[0], None, siblings=COMPILATION)
     assert out.cover_source == "pasta"
     assert out.note.startswith("internet: erro (certificate verify failed")
+
+
+def test_store_cover_when_cover_art_archive_unreachable(tmp_path):
+    from nimbus.metadata import TrackStore
+
+    class CaaDown(FakeHttp):
+        def get(self, url, headers=None):
+            if "coverartarchive" in url:
+                raise OSError("[Errno 111] Connection refused")
+            return super().get(url, headers)
+
+    http = CaaDown({
+        "/recording?": {"recordings": [{"score": 100, "title": "A Via Láctea", "first-release-date": "1996",
+                                         "releases": [{"id": "rel", "title": "A Tempestade", "status": "Official",
+                                                       "release-group": {"id": "rg", "primary-type": "Album"}}]}]},
+        "itunes.apple.com/search": {"results": [
+            {"artistName": "Outro Artista", "artworkUrl100": "https://img/errada/100x100bb.jpg"},
+            {"artistName": "Legião Urbana", "artworkUrl100": "https://img/certa/100x100bb.jpg"}]},
+        "img/certa/300x300bb.jpg": b"CAPA ITUNES",
+    })
+    files = {"a3": b"RIFF" + b"\0" * 100, "img": b"CAPA DA PASTA"}
+    store = TrackStore(tmp_path / "t.json")
+    resolver = MetadataResolver(lambda: "t", online=OnlineLookup(http=http, cache=tmp_path),
+                                covers=CoverCache(tmp_path / "c"), fetcher=lambda fid: fetcher_for(files[fid]),
+                                store=store)
+    item = DriveItem("a7", "07 Legiao Urbana - A VIA LACTEA.mp3", "audio/mpeg")
+    files["a7"] = files["a3"]
+    out = resolver.resolve(item, None, siblings=COMPILATION)
+    assert (out.cover, out.cover_source, out.note) == (b"CAPA ITUNES", "itunes", "")
+    assert store.get("a7")["complete"] is True
+
+
+def test_same_name():
+    from nimbus.metadata import _same_name
+    assert _same_name("Legião Urbana", "LEGIAO URBANA")
+    assert not _same_name("Legião Urbana", "Titãs")
