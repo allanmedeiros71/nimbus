@@ -93,7 +93,7 @@ O nimbus usa, nesta ordem, o que estiver disponível:
 
 Capas e respostas ficam em cache em `~/.cache/nimbus`. A linha "dados: … · capa: …" no painel mostra de onde veio cada coisa.
 
-A capa aparece em alta resolução em terminais com Sixel ou com o protocolo de imagens do kitty (iTerm2, WezTerm, kitty, foot, Konsole). Nos outros, como o Terminal do macOS, ela é desenhada com blocos coloridos. Se a imagem falhar no seu terminal, force os blocos com `NIMBUS_COVER=blocks nimbus`, ou esconda a capa com `NIMBUS_COVER=off`.
+A capa é desenhada com blocos coloridos, o que funciona em qualquer terminal com cores. Em terminais com imagens de verdade dá para pedir mais resolução: `NIMBUS_COVER=kitty` (kitty, Ghostty, WezTerm), `NIMBUS_COVER=sixel` (foot, WezTerm, Konsole, iTerm2) ou `NIMBUS_COVER=auto` para detectar. Se aparecer lixo no lugar da capa, volte para o padrão (`NIMBUS_COVER=blocks`). `NIMBUS_COVER=off` esconde a capa.
 
 ## Linha de comando
 
@@ -142,7 +142,7 @@ Teclas durante o `nimbus play`: `espaço` pausa, `n` próxima, `p` anterior, `�
 - `cli.py` tem os comandos de linha de comando e abre a interface quando não há comando.
 - `completion.py` gera os scripts de autocomplete e responde ao `Tab` com as pastas do Drive.
 
-Variáveis úteis: `NIMBUS_CONFIG_DIR` muda a pasta de configuração, `NIMBUS_MPV` aponta para outro executável do mpv, `NIMBUS_COVER` escolhe como desenhar a capa (`auto`, `blocks`, `off`) e `NIMBUS_OFFLINE=1` desliga as consultas à internet.
+Variáveis úteis: `NIMBUS_CONFIG_DIR` muda a pasta de configuração, `NIMBUS_MPV` aponta para outro executável do mpv, `NIMBUS_COVER` escolhe como desenhar a capa (`blocks`, `kitty`, `sixel`, `auto`, `off`) e `NIMBUS_OFFLINE=1` desliga as consultas à internet.
 
 ## Testes
 
