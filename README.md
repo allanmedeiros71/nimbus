@@ -9,32 +9,37 @@ Player de terminal (Linux e macOS) que toca em streaming as músicas das suas pa
 
 ## Instalação
 
-Em muitos sistemas (macOS com Homebrew, Debian/Ubuntu recentes) não existe o comando `pip` solto, só `python3 -m pip`, e instalar pacotes no Python do sistema é bloqueado. Por isso use um ambiente virtual ou o pipx.
-
-### Opção 1: ambiente virtual dentro da pasta do projeto
-
-```sh
-git clone git@github.com:allanmedeiros71/nimbus.git
-cd nimbus
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-nimbus login
-```
-
-Com o ambiente ativado, `pip` e `nimbus` funcionam normalmente. Em um terminal novo, rode `source .venv/bin/activate` de novo antes de usar o `nimbus`.
-
-### Opção 2: pipx, para ter o comando `nimbus` em qualquer terminal
+O jeito recomendado é o [pipx](https://pipx.pypa.io): ele cria um ambiente isolado para o nimbus e deixa o comando `nimbus` disponível em qualquer pasta e em qualquer terminal, o que também é necessário para o autocomplete.
 
 ```sh
 brew install pipx          # macOS
 sudo apt install pipx      # Debian/Ubuntu
-pipx ensurepath            # depois abra um terminal novo
+pipx ensurepath            # coloca ~/.local/bin no PATH
 
-pipx install -e .          # dentro da pasta clonada
-# ou direto do GitHub:
-pipx install git+ssh://git@github.com/allanmedeiros71/nimbus.git
+git clone git@github.com:allanmedeiros71/nimbus.git
+pipx install -e ./nimbus
 ```
+
+Depois do `pipx ensurepath`, **abra um terminal novo** para o PATH valer. Com `-e`, um `git pull` dentro da pasta já atualiza o comando; só rode `pipx install -e --force ./nimbus` de novo se mudarem as dependências.
+
+Para instalar direto do GitHub, sem clonar: `pipx install git+ssh://git@github.com/allanmedeiros71/nimbus.git` (atualize com `pipx upgrade nimbus`).
+
+### Alternativa para desenvolvimento: ambiente virtual
+
+```sh
+cd nimbus
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e '.[dev]'
+```
+
+Nesse caso o comando `nimbus` só existe com o ambiente ativado: em cada terminal novo rode `source .venv/bin/activate` antes.
+
+### Problemas comuns
+
+- **`zsh: command not found: pip`**: no macOS com Homebrew e em Debian/Ubuntu recentes não existe `pip` solto e o Python do sistema não aceita pacotes. Use o pipx (acima) ou um ambiente virtual.
+- **`zsh: permissão negada: nimbus`** ou **`command not found: nimbus`** fora da pasta do projeto: o comando só estava instalado no venv. Confira com `type -a nimbus`; se não aparecer um caminho como `~/.local/bin/nimbus`, instale com o pipx, rode `pipx ensurepath` e abra um terminal novo.
+- **`mpv não encontrado`**: instale com `brew install mpv` ou `sudo apt install mpv`.
 
 ## Credenciais do Google (uma vez só)
 
@@ -87,7 +92,7 @@ bash: adicione ao `~/.bashrc` (no macOS, `~/.bash_profile`)
 eval "$(nimbus completion bash)"
 ```
 
-Abra um terminal novo e teste com `nimbus ls Mú<Tab>`. Se você usa o venv, o `eval` só funciona quando o comando `nimbus` está no PATH; com o pipx isso vale para qualquer terminal. As listagens ficam em cache por 5 minutos em `~/.cache/nimbus`, então uma pasta recém-criada pode levar esse tempo para aparecer no `Tab`.
+Abra um terminal novo e teste com `nimbus ls Mú<Tab>`. O `eval` precisa do comando `nimbus` no PATH, por isso use a instalação com pipx. As listagens ficam em cache por 5 minutos em `~/.cache/nimbus`, então uma pasta recém-criada pode levar esse tempo para aparecer no `Tab`.
 
 Teclas durante a reprodução: `espaço` pausa, `n` próxima, `p` anterior, `←`/`→` voltam ou avançam 10s, `+`/`-` volume, `q` sai.
 
@@ -104,8 +109,7 @@ Variáveis úteis: `NIMBUS_CONFIG_DIR` muda a pasta de configuração, `NIMBUS_M
 ## Testes
 
 ```sh
-source .venv/bin/activate
-pip install -e '.[dev]'
+source .venv/bin/activate   # ambiente virtual de desenvolvimento (acima)
 pytest
 ```
 
