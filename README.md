@@ -70,6 +70,25 @@ nimbus play "Compartilhados comigo/Discos do Amigo" -r
 
 "Compartilhados comigo" aparece como uma pasta na raiz do `nimbus ls`. Também aceita `Shared with me`, `@compartilhados` ou `@shared`, útil se você tiver uma pasta própria com esse nome. Pastas compartilhadas também podem ser abertas pela URL ou pelo ID, como qualquer outra.
 
+### Autocomplete de pastas (zsh e bash)
+
+Com o autocomplete ativo, `Tab` completa os nomes das pastas do Drive em `nimbus ls` e `nimbus play`, uma parte do caminho por vez, inclusive dentro de "Compartilhados comigo". Maiúsculas e acentos não precisam bater.
+
+zsh (padrão no macOS): adicione ao fim do `~/.zshrc`
+
+```sh
+autoload -Uz compinit && compinit   # se o seu .zshrc ainda não tiver (oh-my-zsh já faz isso)
+eval "$(nimbus completion zsh)"
+```
+
+bash: adicione ao `~/.bashrc` (no macOS, `~/.bash_profile`)
+
+```sh
+eval "$(nimbus completion bash)"
+```
+
+Abra um terminal novo e teste com `nimbus ls Mú<Tab>`. Se você usa o venv, o `eval` só funciona quando o comando `nimbus` está no PATH; com o pipx isso vale para qualquer terminal. As listagens ficam em cache por 5 minutos em `~/.cache/nimbus`, então uma pasta recém-criada pode levar esse tempo para aparecer no `Tab`.
+
 Teclas durante a reprodução: `espaço` pausa, `n` próxima, `p` anterior, `←`/`→` voltam ou avançam 10s, `+`/`-` volume, `q` sai.
 
 ## Como funciona
@@ -78,6 +97,7 @@ Teclas durante a reprodução: `espaço` pausa, `n` próxima, `p` anterior, `←
 - `player.py` inicia o mpv em modo ocioso e o controla pelo socket JSON IPC. Cada faixa é a URL `files/<id>?alt=media` da API, com o cabeçalho `Authorization: Bearer …` enviado pelo socket, nunca na linha de comando.
 - `playback.py` cuida da fila e pede um token renovado antes de cada faixa.
 - `cli.py` é a interface mínima de linha de comando.
+- `completion.py` gera os scripts de autocomplete e responde ao `Tab` com as pastas do Drive.
 
 Variáveis úteis: `NIMBUS_CONFIG_DIR` muda a pasta de configuração, `NIMBUS_MPV` aponta para outro executável do mpv.
 
