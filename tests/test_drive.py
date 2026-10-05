@@ -22,7 +22,7 @@ class FakeFiles:
     def list(self, q, pageToken=None, **kw):
         self.queries.append(q)
         assert kw["supportsAllDrives"] and kw["includeItemsFromAllDrives"]
-        parent = q.split("'")[1]
+        parent = "sharedWithMe" if q.startswith("sharedWithMe = true") else q.split("'")[1]
         files = self.tree.get(parent, [])
         start = int(pageToken or 0)
         page = files[start:start + 2]
@@ -64,6 +64,9 @@ TREE = {
          "shortcutDetails": {"targetId": "a9", "targetMimeType": "audio/mpeg"}},
     ],
     "rock0000000000000001": [audio("a3", "rock.ogg", mime="audio/ogg")],
+    "sharedWithMe": [folder("amigo000000000000001", "Discos do Amigo"), audio("s5", "single.mp3")],
+    "amigo000000000000001": [audio("s6", "lado A.mp3"), folder("bonus000000000000001", "Bônus")],
+    "bonus000000000000001": [audio("s7", "extra.m4a", mime="audio/mp4")],
 }
 
 
@@ -116,3 +119,17 @@ def test_resolve_errors(drive):
 def test_query_escapes_quotes(drive):
     drive.list_children("it's")
     assert drive._service.files().queries[-1].startswith("'it\\'s' in parents")
+
+
+@pytest.mark.parametrize("ref", ["Compartilhados comigo", "compartilhados comigo/", "@shared", "Shared with me"])
+def test_shared_with_me_root(drive, ref):
+    folder = drive.resolve_folder(ref)
+    assert folder.id == "sharedWithMe" and folder.is_folder
+    assert [i.name for i in drive.list_children(folder.id)] == ["Discos do Amigo", "single.mp3"]
+    assert drive._service.files().queries[-1] == "sharedWithMe = true and trashed = false"
+
+
+def test_shared_with_me_subfolders(drive):
+    folder = drive.resolve_folder("Compartilhados comigo/discos do amigo/Bônus")
+    assert folder.id == "bonus000000000000001"
+    assert [t.id for t in drive.list_audio("sharedWithMe", recursive=True)] == ["s5", "s6", "s7"]
