@@ -180,6 +180,21 @@ def cmd_play(args) -> int:
     return 0
 
 
+def cmd_tui(args) -> int:
+    from nimbus.metadata import MetadataResolver, OnlineLookup
+    from nimbus.tui import NimbusApp, image_factory_from_env
+
+    drive, creds = _drive()
+    folder = drive.resolve_folder(args.folder) if args.folder else None
+    image_factory = image_factory_from_env()  # antes do Textual: consulta o terminal
+    token = lambda: auth.access_token(creds)  # noqa: E731
+    online = None if args.offline or os.environ.get("NIMBUS_OFFLINE") else OnlineLookup()
+    resolver = MetadataResolver(token, online=online)
+    with MpvPlayer() as player:
+        NimbusApp(drive, player, token, resolver, start_folder=folder, image_factory=image_factory).run()
+    return 0
+
+
 def cmd_completion(args) -> int:
     from nimbus.completion import SCRIPTS
 
@@ -203,7 +218,7 @@ def cmd_complete(args) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="nimbus", description="Toca em streaming as músicas das suas pastas do Google Drive.")
     p.add_argument("--version", action="version", version=f"nimbus {__version__}")
-    sub = p.add_subparsers(dest="cmd", required=True, metavar="{login,logout,ls,play,completion}")
+    sub = p.add_subparsers(dest="cmd", metavar="{tui,login,logout,ls,play,completion}")
 
     s = sub.add_parser("login", help="autoriza o acesso somente leitura ao seu Drive")
     s.add_argument("--client-secret", type=lambda v: Path(v).expanduser(),
@@ -226,6 +241,12 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("-s", "--shuffle", action="store_true", help="ordem aleatória")
     s.set_defaults(func=cmd_play)
 
+    s = sub.add_parser("tui", help="abre a interface visual (padrão quando não há comando)")
+    s.add_argument("folder", nargs="?", default="", help="pasta para abrir já selecionada; " + folder_help)
+    s.add_argument("--offline", action="store_true",
+                   help="não consulta MusicBrainz/Cover Art Archive (também: NIMBUS_OFFLINE=1)")
+    s.set_defaults(func=cmd_tui)
+
     s = sub.add_parser("completion", help="imprime o script de autocomplete (zsh ou bash)")
     s.add_argument("shell", choices=["zsh", "bash"])
     s.set_defaults(func=cmd_completion)
@@ -238,6 +259,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.cmd is None:  # só "nimbus": abre a interface visual
+        args = build_parser().parse_args(["tui", *(argv or [])])
     try:
         return args.func(args)
     except (auth.AuthError, DriveError, MpvError) as e:

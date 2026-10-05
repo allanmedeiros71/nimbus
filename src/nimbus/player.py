@@ -185,6 +185,11 @@ class MpvPlayer:
     def set_property(self, name: str, value: Any) -> None:
         self.command("set_property", name, value)
 
+    def observe(self, *names: str) -> None:
+        """Pede ao mpv eventos "property-change" sempre que essas propriedades mudarem."""
+        for name in names:
+            self.command("observe_property", next(self._ids), name)
+
     # reprodução
 
     def play(self, url: str, headers: dict[str, str] | None = None) -> None:

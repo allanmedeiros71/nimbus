@@ -13,6 +13,10 @@ dependencies = [
     "google-api-python-client>=2.100",
     "google-auth>=2.20",
     "google-auth-oauthlib>=1.0",
+    "textual>=0.80",
+    "textual-image>=0.8",
+    "pillow>=9",
+    "mutagen>=1.45",
 ]
 
 [project.optional-dependencies]

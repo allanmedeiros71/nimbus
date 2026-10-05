@@ -12,12 +12,20 @@ from nimbus.drive import DriveItem, media_url
 from nimbus.player import MpvPlayer
 
 
+REPEAT_MODES = ("off", "all", "one")
+
+
 class PlayQueue:
-    def __init__(self, tracks: Sequence[DriveItem], shuffle: bool = False, seed: int | None = None):
+    def __init__(self, tracks: Sequence[DriveItem], shuffle: bool = False, seed: int | None = None,
+                 start: int = 0):
+        self._original = list(tracks)
         self.tracks = list(tracks)
+        self.index = start if 0 <= start < len(self.tracks) else 0
+        self.repeat = "off"
+        self.shuffle = False
+        self._rng = random.Random(seed)
         if shuffle:
-            random.Random(seed).shuffle(self.tracks)
-        self.index = 0
+            self.set_shuffle(True, keep_current=start != 0)
 
     def __len__(self) -> int:
         return len(self.tracks)
@@ -30,13 +38,44 @@ class PlayQueue:
         if self.index + 1 < len(self.tracks):
             self.index += 1
             return True
+        if self.repeat == "all" and self.tracks:
+            self.index = 0
+            return True
         return False
 
     def back(self) -> bool:
         if self.index > 0:
             self.index -= 1
             return True
+        if self.repeat == "all" and self.tracks:
+            self.index = len(self.tracks) - 1
+            return True
         return False
+
+    def cycle_repeat(self) -> str:
+        self.repeat = REPEAT_MODES[(REPEAT_MODES.index(self.repeat) + 1) % len(REPEAT_MODES)]
+        return self.repeat
+
+    def set_shuffle(self, on: bool, keep_current: bool = True) -> None:
+        """Embaralha ou volta à ordem original sem trocar a faixa atual.
+
+        Com keep_current, a faixa atual vira a primeira e só o resto é embaralhado.
+        """
+        current = self.current
+        if on:
+            rest = list(self._original)
+            if keep_current and current is not None:
+                rest.remove(current)
+                self._rng.shuffle(rest)
+                self.tracks = [current, *rest]
+            else:
+                self._rng.shuffle(rest)
+                self.tracks = rest
+            self.index = 0
+        else:
+            self.tracks = list(self._original)
+            self.index = self.tracks.index(current) if current in self.tracks else 0
+        self.shuffle = on
 
 
 class Controller:
@@ -83,4 +122,7 @@ class Controller:
             self.last_error = f"{item.name if item else '?'}: {event.get('file_error', 'erro')}"
         elif reason != "eof":
             return False  # "stop" vem de loadfile replace ou de stop(): não avança
+        elif self.queue.repeat == "one":
+            self.play_current()
+            return True
         return self.next()
