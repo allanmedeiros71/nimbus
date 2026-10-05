@@ -298,3 +298,49 @@ def test_network_error_keeps_retrying(tmp_path):
     resolver.resolve(item, None)
     assert store.get("f1")["complete"] is False
     assert resolver.basic(item, None).title == "Nome"  # mostra o que tem enquanto isso
+
+
+COMPILATION = [
+    DriveItem("a1", "01 Capital Inicial - FOGO.mp3", "audio/mpeg"),
+    DriveItem("a2", "02 Titas - NAO VOU ME ADAPTAR.mp3", "audio/mpeg"),
+    DriveItem("a3", "17 Legiao Urbana - TEMPO PERDIDO.mp3", "audio/mpeg"),
+    DriveItem("img", "capa.jpg", "image/jpeg"),
+]
+
+
+def test_is_compilation():
+    from nimbus.metadata import is_compilation
+    assert is_compilation(COMPILATION)
+    album = [DriveItem(str(i), f"{i:02d} Legiao Urbana - Faixa {i}.mp3", "audio/mpeg") for i in range(1, 9)]
+    assert not is_compilation(album)
+    assert not is_compilation([DriveItem("x", "01 Tempo Perdido.mp3", "audio/mpeg")])
+
+
+def test_compilation_prefers_per_track_cover(tmp_path):
+    from nimbus.metadata import TrackStore
+
+    files = {"a3": mp3_with_cover(), "img": b"CAPA DA PASTA"}
+    http = FakeHttp({
+        "/recording?": {"recordings": [{"score": 100, "title": "Tempo Perdido", "first-release-date": "1986",
+                                         "releases": [{"id": "rel", "title": "Dois", "status": "Official",
+                                                       "release-group": {"id": "rg-dois", "primary-type": "Album"}}]}]},
+        "coverartarchive.org/release-group/rg-dois/front": b"CAPA DO DISCO DOIS",
+    })
+    resolver = MetadataResolver(lambda: "t", online=OnlineLookup(http=http, cache=tmp_path),
+                                covers=CoverCache(tmp_path / "c"), fetcher=lambda fid: fetcher_for(files[fid]),
+                                store=TrackStore(tmp_path / "t.json"))
+    out = resolver.resolve(COMPILATION[2], {"album": "100 Mais Pop&Rock Brasil", "date": "2000", "genre": "rock"},
+                           siblings=COMPILATION)
+    assert out.cover == b"CAPA DO DISCO DOIS" and out.cover_source == "cover art archive"
+    assert any("recording" in u and "release%3A" not in u for u in http.urls)  # busca pela música, não pela coletânea
+
+
+def test_compilation_falls_back_to_folder_image(tmp_path):
+    from nimbus.metadata import TrackStore
+
+    files = {"a1": b"RIFF" + b"\0" * 100, "img": b"CAPA DA PASTA"}
+    resolver = MetadataResolver(lambda: "t", online=OnlineLookup(http=FakeHttp({}), cache=tmp_path),
+                                covers=CoverCache(tmp_path / "c"), fetcher=lambda fid: fetcher_for(files[fid]),
+                                store=TrackStore(tmp_path / "t.json"))
+    out = resolver.resolve(COMPILATION[0], None, siblings=COMPILATION)
+    assert out.cover == b"CAPA DA PASTA" and out.cover_source == "pasta"

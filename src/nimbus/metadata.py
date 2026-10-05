@@ -258,6 +258,16 @@ def folder_cover_candidates(siblings: Sequence[DriveItem]) -> list[DriveItem]:
     return sorted(images, key=rank)
 
 
+def is_compilation(siblings: Sequence[DriveItem]) -> bool:
+    """Pasta com faixas de artistas diferentes, pelo nome dos arquivos ("NN Artista - Título")."""
+    artists = [from_filename(i.name).artist.casefold() for i in siblings if i.is_audio]
+    artists = [a for a in artists if a]
+    if len(artists) < 2:
+        return False
+    top = max(artists.count(a) for a in set(artists))
+    return len(set(artists)) >= 2 and top / len(artists) < 0.8
+
+
 # --- internet ----------------------------------------------------------------
 
 class Http:
@@ -488,7 +498,7 @@ class TrackStore:
     continua somente leitura. Apagar o arquivo faz tudo ser resolvido de novo.
     """
 
-    VERSION = 1  # muda quando a lógica de correção mudar, para refazer as faixas
+    VERSION = 2  # muda quando a lógica de correção mudar, para refazer as faixas
 
     def __init__(self, path: Path | None = None):
         self.path = path or cache_dir() / "tracks.json"
@@ -582,23 +592,16 @@ class MetadataResolver:
         album_from_folder = "pasta" in info.sources
         out = Resolved(info=info)
 
-        # Quem grava propaganda nas tags costuma pôr a própria arte como capa.
+        # Numa coletânea a capa embutida e a imagem da pasta costumam ser a mesma
+        # para todas as faixas: primeiro tenta a capa do disco original de cada
+        # música na internet, e essas ficam por último.
+        compilation = is_compilation(siblings)
         cover_key = ""
-        key = f"embedded:{item.id}"
-        cover = None if junk_tags else self._cached(
-            key, lambda: embedded_cover(self._fetcher(item.id)), errors)
-        if cover:
-            out.cover, out.cover_source, cover_key = cover, "arquivo", key
-        else:
-            for img in folder_cover_candidates(siblings)[:2]:
-                key = f"drive:{img.id}"
-                cover = self._cached(key, lambda img=img: self._fetcher(img.id)(0, 8 * 1024 * 1024 - 1), errors)
-                if cover:
-                    out.cover, out.cover_source, cover_key = cover, "pasta", key
-                    break
+        if not compilation:
+            cover_key = self._local_cover(item, siblings, junk_tags, out, errors)
 
         if self.online is not None and (info.missing() or out.cover is None):
-            query = replace(info, album="" if album_from_folder else info.album)
+            query = replace(info, album="" if album_from_folder or compilation else info.album)
             result = self.online.lookup(query, errors)
             if result:
                 filled = TrackInfo(album=result.album, year=result.year, genre=result.genre,
@@ -612,7 +615,26 @@ class MetadataResolver:
                     out.cover = self._cached(key, lambda: self.online.cover(result), errors)
                     if out.cover:
                         out.cover_source, cover_key = "cover art archive", key
+        if out.cover is None and compilation:
+            cover_key = self._local_cover(item, siblings, junk_tags, out, errors)
         return out, cover_key
+
+    def _local_cover(self, item: DriveItem, siblings: Sequence[DriveItem], junk_tags: bool,
+                     out: Resolved, errors: list) -> str:
+        """Capa embutida (se as tags não são propaganda) ou, sem ela, imagem da pasta."""
+        key = f"embedded:{item.id}"
+        # Quem grava propaganda nas tags costuma pôr a própria arte como capa.
+        cover = None if junk_tags else self._cached(key, lambda: embedded_cover(self._fetcher(item.id)), errors)
+        if cover:
+            out.cover, out.cover_source = cover, "arquivo"
+            return key
+        for img in folder_cover_candidates(siblings)[:2]:
+            key = f"drive:{img.id}"
+            cover = self._cached(key, lambda img=img: self._fetcher(img.id)(0, 8 * 1024 * 1024 - 1), errors)
+            if cover:
+                out.cover, out.cover_source = cover, "pasta"
+                return key
+        return ""
 
     def _cached(self, key: str, compute: Callable[[], bytes | None], errors: list | None = None) -> bytes | None:
         if self.covers.has(key):

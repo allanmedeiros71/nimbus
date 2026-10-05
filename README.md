@@ -91,6 +91,8 @@ O nimbus usa, nesta ordem, o que estiver disponível:
 4. Uma imagem na mesma pasta do Drive (`cover.jpg`, `folder.png`, `capa.jpg`…).
 5. [MusicBrainz](https://musicbrainz.org) para completar álbum, ano e gênero, e o [Cover Art Archive](https://coverartarchive.org) para a capa. Só artista, título e álbum são enviados. Use `--offline` ou `NIMBUS_OFFLINE=1` para desligar.
 
+Em coletâneas (pastas com faixas de artistas diferentes, pelo nome dos arquivos) a capa vem primeiro do disco original de cada música no Cover Art Archive; a capa embutida e a imagem da pasta ficam como reserva, já que costumam ser iguais em todas as faixas.
+
 Tags de propaganda (telefone, WhatsApp, links, como "DJ FULANO 62999999999 WHATSAPP") são ignoradas e o nome do arquivo assume; nesses arquivos a capa embutida também é ignorada.
 
 Cada música resolvida fica salva em `~/.cache/nimbus/tracks.json`, pelo ID do arquivo no Drive: da próxima vez, título, artista, álbum e capa corrigidos aparecem na hora, sem consultar o Drive nem a internet ("salvo" na linha de dados). Nada é gravado no Drive, que continua somente leitura. Se a internet falhar, a faixa é consultada de novo na próxima vez. Apague `tracks.json` para refazer tudo. Gravar as correções nos próprios arquivos está no [backlog](ROADMAP.md).
