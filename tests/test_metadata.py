@@ -241,3 +241,60 @@ def test_good_tags_win_over_filename():
     item = DriveItem("f1", "16 Titas - INSENSIVEL.mp3", "audio/mpeg")
     info = MetadataResolver(lambda: "t").basic(item, {"title": "Insensível", "artist": "Titãs"})
     assert (info.artist, info.title) == ("Titãs", "Insensível")
+
+
+def test_corrections_are_saved_and_reused(tmp_path):
+    from nimbus.metadata import TrackStore
+
+    item = DriveItem("f1", "16 Titas - INSENSIVEL.mp3", "audio/mpeg")
+    spam = "DJ 62992131650 WHATSAPP"
+    http = FakeHttp({
+        "/release-group?": {"release-groups": [{"score": 100, "id": "rg", "title": "Õ Blésq Blom",
+                                                "first-release-date": "1989"}]},
+        "/recording?": {"recordings": [{"score": 100, "title": "Insensível", "first-release-date": "1989",
+                                         "releases": [{"id": "rel", "title": "Õ Blésq Blom", "status": "Official",
+                                                       "release-group": {"id": "rg", "primary-type": "Album"}}]}]},
+        "/release-group/rg?": {"genres": [{"name": "rock", "count": 3}]},
+        "coverartarchive.org/release-group/rg/front": b"CAPA",
+    })
+    calls = []
+
+    def fetcher(fid):
+        calls.append(fid)
+        return fetcher_for(mp3_with_cover())
+
+    def make(http_):
+        return MetadataResolver(lambda: "t", online=OnlineLookup(http=http_, cache=tmp_path),
+                                covers=CoverCache(tmp_path / "c"), fetcher=fetcher,
+                                store=TrackStore(tmp_path / "tracks.json"))
+
+    first = make(http).resolve(item, {"title": spam, "artist": spam})
+    assert (first.info.title, first.info.artist, first.info.genre, first.cover) == ("INSENSIVEL", "Titas", "rock", b"CAPA")
+
+    # Outra sessão do nimbus: a correção vem do disco, sem Drive nem internet.
+    calls.clear()
+    offline = FakeHttp({})
+    resolver = make(offline)
+    assert resolver.basic(item, None).title == "INSENSIVEL"  # já na hora de começar a tocar
+    again = resolver.resolve(item, {"title": spam, "artist": spam})
+    assert (again.info.title, again.info.genre, again.cover, again.cover_source) == (
+        "INSENSIVEL", "rock", b"CAPA", "cover art archive")
+    assert "salvo" in again.info.sources
+    assert offline.urls == [] and calls == []
+
+
+def test_network_error_keeps_retrying(tmp_path):
+    from nimbus.metadata import TrackStore
+
+    class Offline(FakeHttp):
+        def get(self, url, headers=None):
+            raise OSError("sem rede")
+
+    item = DriveItem("f1", "Artista - Nome.wav", "audio/wav")
+    store = TrackStore(tmp_path / "tracks.json")
+    resolver = MetadataResolver(lambda: "t", online=OnlineLookup(http=Offline({}), cache=tmp_path),
+                                covers=CoverCache(tmp_path / "c"),
+                                fetcher=lambda fid: fetcher_for(b"RIFF" + b"\0" * 100), store=store)
+    resolver.resolve(item, None)
+    assert store.get("f1")["complete"] is False
+    assert resolver.basic(item, None).title == "Nome"  # mostra o que tem enquanto isso
