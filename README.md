@@ -110,9 +110,15 @@ O nimbus usa, nesta ordem, o que estiver disponível:
 4. Uma imagem na mesma pasta do Drive (`cover.jpg`, `folder.png`, `capa.jpg`…).
 5. [MusicBrainz](https://musicbrainz.org) para completar álbum, ano e gênero, e o [Cover Art Archive](https://coverartarchive.org) para a capa. Só artista, título e álbum são enviados. Use `--offline` ou `NIMBUS_OFFLINE=1` para desligar.
 
+Em coletâneas (pastas com faixas de artistas diferentes, pelo nome dos arquivos) a capa vem primeiro do disco original de cada música no Cover Art Archive; a capa embutida e a imagem da pasta ficam como reserva, já que costumam ser iguais em todas as faixas.
+
+Tags de propaganda (telefone, WhatsApp, links, como "DJ FULANO 62999999999 WHATSAPP") são ignoradas e o nome do arquivo assume; nesses arquivos a capa embutida também é ignorada.
+
+Cada música resolvida fica salva em `~/.cache/nimbus/tracks.json`, pelo ID do arquivo no Drive: da próxima vez, título, artista, álbum e capa corrigidos aparecem na hora, sem consultar o Drive nem a internet ("salvo" na linha de dados). Nada é gravado no Drive, que continua somente leitura. Se a internet falhar, a faixa é consultada de novo na próxima vez. Apague `tracks.json` para refazer tudo. Gravar as correções nos próprios arquivos está no [backlog](ROADMAP.md).
+
 Capas e respostas ficam em cache em `~/.cache/nimbus`. A linha "dados: … · capa: …" no painel mostra de onde veio cada coisa.
 
-A capa aparece em alta resolução em terminais com Sixel ou com o protocolo de imagens do kitty (iTerm2, WezTerm, kitty, foot, Konsole). Nos outros, como o Terminal do macOS, ela é desenhada com blocos coloridos. Se a imagem falhar no seu terminal, force os blocos com `NIMBUS_COVER=blocks nimbus`, ou esconda a capa com `NIMBUS_COVER=off`.
+A capa é desenhada com blocos coloridos, o que funciona em qualquer terminal com cores. Em terminais com imagens de verdade dá para pedir mais resolução: `NIMBUS_COVER=kitty` (kitty, Ghostty, WezTerm), `NIMBUS_COVER=sixel` (foot, WezTerm, Konsole, iTerm2) ou `NIMBUS_COVER=auto` para detectar. Se aparecer lixo no lugar da capa, volte para o padrão (`NIMBUS_COVER=blocks`). `NIMBUS_COVER=off` esconde a capa.
 
 ## Linha de comando
 
@@ -169,7 +175,7 @@ Teclas durante o `nimbus play`: `espaço` pausa, `n` próxima, `p` anterior, `�
 - `cli.py` tem os comandos de linha de comando e abre a interface quando não há comando.
 - `completion.py` gera os scripts de autocomplete e responde ao `Tab` com as pastas do Drive.
 
-Variáveis úteis: `NIMBUS_CONFIG_DIR` muda a pasta de configuração, `NIMBUS_MPV` aponta para outro executável do mpv, `NIMBUS_COVER` escolhe como desenhar a capa (`auto`, `blocks`, `off`) e `NIMBUS_OFFLINE=1` desliga as consultas à internet.
+Variáveis úteis: `NIMBUS_CONFIG_DIR` muda a pasta de configuração, `NIMBUS_MPV` aponta para outro executável do mpv, `NIMBUS_COVER` escolhe como desenhar a capa (`blocks`, `kitty`, `sixel`, `auto`, `off`) e `NIMBUS_OFFLINE=1` desliga as consultas à internet.
 
 ## Testes
 

@@ -12,7 +12,7 @@ from nimbus.auth import NotLoggedIn
 from nimbus.completion import complete
 from nimbus.drive import DriveError
 from nimbus.library import Library
-from nimbus.metadata import CoverCache, MetadataResolver
+from nimbus.metadata import CoverCache, MetadataResolver, TrackStore
 from nimbus.playback import Controller, PlayQueue
 
 from test_player import make_wav
@@ -144,10 +144,9 @@ def test_local_metadata_and_embedded_cover(music, tmp_path):
     items = lib.list_children(folder.id)
     track = items[1]
     resolver = MetadataResolver(lambda: pytest.fail("arquivo local não usa token"), online=None,
-                                covers=CoverCache(tmp_path / "covers"))
+                                covers=CoverCache(tmp_path / "covers"), store=TrackStore(tmp_path / "t.json"))
     resolved = resolver.resolve(track, {"title": "Faixa Dois", "artist": "Banda Local"}, items, folder.name)
     assert resolved.cover == tiny_png() and resolved.cover_source == "arquivo"
-    assert not (tmp_path / "covers").exists()  # capa de arquivo local não vai para o cache
 
     sem_capa = items[2]
     resolved = resolver.resolve(sem_capa, None, items, folder.name)
@@ -182,7 +181,8 @@ def test_tui_without_login_shows_this_computer(music, monkeypatch, tmp_path):
 
     monkeypatch.setattr(local, "local_places", lambda platform=None: [local.local_item(music.parent, "Pasta pessoal")])
     lib = Library(None)
-    resolver = MetadataResolver(lambda: "", online=None, covers=CoverCache(tmp_path / "covers"))
+    resolver = MetadataResolver(lambda: "", online=None, covers=CoverCache(tmp_path / "covers"),
+                                store=TrackStore(tmp_path / "t.json"))
 
     async def scenario():
         with MpvPlayer(extra_args=["--ao=null"]) as player:

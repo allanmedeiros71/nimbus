@@ -11,7 +11,7 @@ from nimbus import playback
 from nimbus.drive import FOLDER_MIME, DriveItem, SHARED_WITH_ME
 from nimbus.metadata import CoverCache, MetadataResolver
 from nimbus.player import MpvPlayer
-from nimbus.tui import CoverArt, NimbusApp, TrackTable, progress_text
+from nimbus.tui import BlockImage, CoverArt, NimbusApp, TrackTable, image_factory_from_env, progress_text
 
 from test_player import TOKEN, FakeDrive, make_wav
 
@@ -126,7 +126,7 @@ def test_browse_and_play(setup):
             # Controles: pausa, repeat, shuffle, volume, próxima.
             await pilot.press("space")
             assert await wait_until(pilot, lambda: app.state.get("pause") is True)
-            assert await wait_until(pilot, lambda: "❚❚" in text_of(app, "#pb-title"))  # o título muda no próximo tick
+            assert await wait_until(pilot, lambda: "❚❚" in text_of(app, "#pb-title"))  # próximo _tick
             await pilot.press("space")
             assert await wait_until(pilot, lambda: app.state.get("pause") is False)
 
@@ -190,13 +190,14 @@ def test_cover_widget_mounts_image(setup):
     drive, player, resolver = setup
 
     async def scenario():
-        from textual_image.widget import HalfcellImage
-
-        app = NimbusApp(drive, player, lambda: TOKEN, resolver, image_factory=HalfcellImage)
+        app = NimbusApp(drive, player, lambda: TOKEN, resolver, image_factory=image_factory_from_env())
         async with app.run_test(size=(110, 32)) as pilot:
             cover = app.query_one(CoverArt)
             app.start_playback(ROCK, [T1, T2], [T1, T2], 0)
             assert await wait_until(pilot, lambda: cover.has_image)
+            await pilot.pause(0.1)
+            drawn = cover.query_one(BlockImage).render()
+            assert drawn.plain.count("▀") == 14 * 7  # só meios-blocos, nada de texto de Sixel
 
     asyncio.run(scenario())
 
@@ -206,3 +207,12 @@ def test_progress_text():
     assert t.plain.strip() == "0:30/2:00"
     assert len(t.plain) == 20
     assert len(progress_text(10, None, None).plain) == 10  # o rótulo é cortado, a barra não estoura
+
+
+def test_cover_mode_defaults_to_blocks(monkeypatch):
+    monkeypatch.delenv("NIMBUS_COVER", raising=False)
+    assert image_factory_from_env() is BlockImage
+    monkeypatch.setenv("NIMBUS_COVER", "off")
+    assert image_factory_from_env() is None
+    monkeypatch.setenv("NIMBUS_COVER", "qualquer-coisa")
+    assert image_factory_from_env() is BlockImage
