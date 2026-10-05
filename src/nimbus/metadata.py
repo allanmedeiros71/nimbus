@@ -450,6 +450,57 @@ class OnlineLookup:
                     raise
         return None
 
+    def store_cover(self, info: TrackInfo) -> tuple:
+        """Capa pelas buscas públicas do iTunes e do Deezer (sem chave de API).
+
+        Reserva para quando o Cover Art Archive não tem a capa ou não é acessível
+        (as imagens dele ficam no archive.org, bloqueado em algumas redes).
+        Devolve (bytes, nome da fonte) ou (None, "").
+        """
+        if not (info.title and info.artist):
+            return None, ""
+        last_error = None
+        for name, find in (("itunes", self._itunes_art), ("deezer", self._deezer_art)):
+            try:
+                url = find(info)
+                if url:
+                    return self.http.get(url), name
+            except (OSError, ValueError, urllib.error.URLError) as e:
+                last_error = e
+        if last_error is not None:
+            raise last_error
+        return None, ""
+
+    def _itunes_art(self, info: TrackInfo) -> str:
+        term = urllib.parse.quote(f"{info.artist} {info.title}")
+        data = self.http.json(f"https://itunes.apple.com/search?term={term}&entity=song&limit=10")
+        for r in data.get("results", []):
+            if _same_name(r.get("artistName", ""), info.artist) and r.get("artworkUrl100"):
+                return r["artworkUrl100"].replace("100x100bb", "300x300bb")
+        return ""
+
+    def _deezer_art(self, info: TrackInfo) -> str:
+        q = urllib.parse.quote(f'artist:"{info.artist}" track:"{info.title}"')
+        data = self.http.json(f"https://api.deezer.com/search?q={q}&limit=10")
+        for r in data.get("data", []):
+            album = r.get("album") or {}
+            if _same_name((r.get("artist") or {}).get("name", ""), info.artist) and album.get("cover_medium"):
+                return album["cover_medium"]
+        return ""
+
+
+def _fold(value: str) -> str:
+    import unicodedata
+
+    value = unicodedata.normalize("NFKD", value)
+    return re.sub(r"[^a-z0-9]", "", "".join(c for c in value if not unicodedata.combining(c)).lower())
+
+
+def _same_name(a: str, b: str) -> bool:
+    """'Legião Urbana' == 'LEGIAO URBANA'; tolera 'Titãs' vs 'Titãs & Convidados'."""
+    fa, fb = _fold(a), _fold(b)
+    return bool(fa and fb) and (fa == fb or fa.startswith(fb) or fb.startswith(fa))
+
 
 # --- juntando tudo -----------------------------------------------------------
 
@@ -599,7 +650,8 @@ class MetadataResolver:
         out, cover_key = self._resolve(item, tags, siblings, folder_name, errors)
         entry = {k: getattr(out.info, k) for k in _INFO_FIELDS}
         entry.update(sources=out.info.sources, cover_key=cover_key, cover_source=out.cover_source, note=out.note,
-                     complete=not errors)  # erro de rede: mostra o que salvou, mas tenta de novo depois
+                     # erro de rede sem capa: mostra o que salvou, mas tenta de novo depois
+                     complete=not errors or (out.cover is not None and out.cover_source != "pasta"))
         self.store.put(item.id, entry)
         return out
 
@@ -641,6 +693,22 @@ class MetadataResolver:
                         out.note = f"internet: erro ({str(errors[-1])[:60]})"
                     else:
                         out.note = "cover art archive: sem capa"
+            if out.cover is None:
+                query = out.info if result else info
+                key = "store:" + "|".join(_fold(x) for x in (query.artist, query.title))
+                found: dict = {}
+
+                def from_store() -> bytes | None:
+                    data, found["source"] = self.online.store_cover(query)
+                    return data
+
+                n_errors = len(errors)
+                out.cover = self._cached(key, from_store, errors)
+                if out.cover:
+                    out.cover_source, cover_key = found.get("source") or "itunes/deezer", key
+                    out.note = ""
+                elif len(errors) > n_errors and not out.note.startswith("internet"):
+                    out.note = f"internet: erro ({str(errors[-1])[:60]})"
         if out.cover is None and compilation:
             cover_key = self._local_cover(item, siblings, junk_tags, out, errors)
         return out, cover_key
