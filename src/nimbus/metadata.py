@@ -383,7 +383,8 @@ class OnlineLookup:
     def lookup(self, info: TrackInfo, errors: list | None = None) -> OnlineResult | None:
         if not info.title and not info.album:
             return None
-        key = "|".join(x.casefold() for x in (info.artist, info.title, info.album))
+        # O prefixo muda quando a busca muda, para não reaproveitar um "não achei" antigo.
+        key = "v2|" + "|".join(x.casefold() for x in (info.artist, info.title, info.album))
         with self._lock:
             if key in self._cache:
                 hit = self._cache[key]
@@ -406,13 +407,11 @@ class OnlineLookup:
             result = parse_release_group_search(
                 self.http.json(f"{MB_API}/release-group?fmt=json&limit=3&query={urllib.parse.quote(q)}"))
         if result is None and info.title:
-            q = f"recording:{_lucene(info.title)}"
-            if info.artist:
-                q += f" AND artist:{_lucene(info.artist)}"
-            if info.album:
-                q += f" AND release:{_lucene(info.album)}"
-            result = parse_recording_search(
-                self.http.json(f"{MB_API}/recording?fmt=json&limit=5&query={urllib.parse.quote(q)}"))
+            for q in self._recording_queries(info):
+                result = parse_recording_search(
+                    self.http.json(f"{MB_API}/recording?fmt=json&limit=5&query={urllib.parse.quote(q)}"))
+                if result is not None:
+                    break
         if result and result.release_group and not result.genre:
             try:
                 data = self.http.json(f"{MB_API}/release-group/{result.release_group}?fmt=json&inc=genres+tags")
@@ -420,6 +419,22 @@ class OnlineLookup:
             except (OSError, ValueError, urllib.error.URLError):
                 pass
         return result
+
+    @staticmethod
+    def _recording_queries(info: TrackInfo) -> list:
+        """Da busca mais exata à mais solta: o álbum pode ser uma coletânea e o
+        nome do arquivo costuma vir sem acentos ou em maiúsculas."""
+        def words(value: str) -> str:
+            return "(" + re.sub(r'[^\w\s]', " ", value).strip() + ")"
+
+        queries = []
+        artist = f" AND artist:{_lucene(info.artist)}" if info.artist else ""
+        if info.album:
+            queries.append(f"recording:{_lucene(info.title)}{artist} AND release:{_lucene(info.album)}")
+        queries.append(f"recording:{_lucene(info.title)}{artist}")
+        if info.artist:
+            queries.append(f"recording:{words(info.title)} AND artist:{words(info.artist)}")
+        return queries
 
     def cover(self, result: OnlineResult) -> bytes | None:
         urls = []
@@ -489,6 +504,7 @@ class Resolved:
     info: TrackInfo
     cover: Optional[bytes] = None
     cover_source: str = ""
+    note: str = ""  # o que aconteceu na internet, para mostrar no painel
 
 
 class TrackStore:
@@ -498,7 +514,7 @@ class TrackStore:
     continua somente leitura. Apagar o arquivo faz tudo ser resolvido de novo.
     """
 
-    VERSION = 2  # muda quando a lógica de correção mudar, para refazer as faixas
+    VERSION = 3  # muda quando a lógica de correção mudar, para refazer as faixas
 
     def __init__(self, path: Path | None = None):
         self.path = path or cache_dir() / "tracks.json"
@@ -576,12 +592,13 @@ class MetadataResolver:
         if entry and entry.get("complete"):
             cover = self.covers.get(entry["cover_key"]) if entry.get("cover_key") else None
             if cover or not entry.get("cover_key"):  # capa sumiu do cache: refaz
-                return Resolved(info=self.known(item), cover=cover, cover_source=entry.get("cover_source", ""))
+                return Resolved(info=self.known(item), cover=cover, cover_source=entry.get("cover_source", ""),
+                                note=entry.get("note", ""))
 
         errors: list = []
         out, cover_key = self._resolve(item, tags, siblings, folder_name, errors)
         entry = {k: getattr(out.info, k) for k in _INFO_FIELDS}
-        entry.update(sources=out.info.sources, cover_key=cover_key, cover_source=out.cover_source,
+        entry.update(sources=out.info.sources, cover_key=cover_key, cover_source=out.cover_source, note=out.note,
                      complete=not errors)  # erro de rede: mostra o que salvou, mas tenta de novo depois
         self.store.put(item.id, entry)
         return out
@@ -602,7 +619,12 @@ class MetadataResolver:
 
         if self.online is not None and (info.missing() or out.cover is None):
             query = replace(info, album="" if album_from_folder or compilation else info.album)
+            n_errors = len(errors)
             result = self.online.lookup(query, errors)
+            if len(errors) > n_errors:
+                out.note = f"internet: erro ({str(errors[-1])[:60]})"
+            elif result is None:
+                out.note = "musicbrainz: não encontrado"
             if result:
                 filled = TrackInfo(album=result.album, year=result.year, genre=result.genre,
                                    artist=result.artist, sources=["musicbrainz"])
@@ -615,6 +637,10 @@ class MetadataResolver:
                     out.cover = self._cached(key, lambda: self.online.cover(result), errors)
                     if out.cover:
                         out.cover_source, cover_key = "cover art archive", key
+                    elif len(errors) > n_errors:
+                        out.note = f"internet: erro ({str(errors[-1])[:60]})"
+                    else:
+                        out.note = "cover art archive: sem capa"
         if out.cover is None and compilation:
             cover_key = self._local_cover(item, siblings, junk_tags, out, errors)
         return out, cover_key
