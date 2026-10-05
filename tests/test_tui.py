@@ -126,7 +126,7 @@ def test_browse_and_play(setup):
             # Controles: pausa, repeat, shuffle, volume, próxima.
             await pilot.press("space")
             assert await wait_until(pilot, lambda: app.state.get("pause") is True)
-            assert "❚❚" in text_of(app, "#pb-title")
+            assert await wait_until(pilot, lambda: "❚❚" in text_of(app, "#pb-title"))  # o título muda no próximo tick
             await pilot.press("space")
             assert await wait_until(pilot, lambda: app.state.get("pause") is False)
 
@@ -181,7 +181,7 @@ def test_vim_keys_in_tree(setup):
             await pilot.press("h")
             assert tree.cursor_node.data.id == "root"
             await pilot.press("G")
-            assert tree.cursor_node.data.name == "Compartilhados comigo"
+            assert tree.cursor_node.data.name == "Este computador"
 
     asyncio.run(scenario())
 

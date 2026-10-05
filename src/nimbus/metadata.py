@@ -5,7 +5,7 @@ A ordem de busca vai do que custa menos ao que depende da internet:
 1. Tags lidas pelo mpv (título, artista, álbum, gênero, ano).
 2. Nome do arquivo ("01 - Artista - Título.mp3") e da pasta, quando faltam tags.
 3. Capa embutida no arquivo (ID3 do MP3 e bloco PICTURE do FLAC), lendo do
-   Drive só o começo do arquivo, onde esses dados ficam.
+   Drive (ou do disco) só o começo do arquivo, onde esses dados ficam.
 4. Imagem na mesma pasta (cover.jpg, folder.png, capa.jpg…).
 5. MusicBrainz para completar álbum, ano e gênero, e Cover Art Archive para a
    capa. Só artista, título e álbum saem do computador.
@@ -31,6 +31,7 @@ from typing import Callable, Optional, Sequence
 
 from nimbus import __version__
 from nimbus.drive import DriveItem, media_url
+from nimbus.local import is_local_id, local_fetcher, local_path
 
 USER_AGENT = f"nimbus/{__version__} ( https://github.com/allanmedeiros71/nimbus )"
 MB_API = "https://musicbrainz.org/ws/2"
@@ -457,7 +458,11 @@ class MetadataResolver:
         self._token = token
         self.online = online
         self.covers = covers or CoverCache()
-        self._fetcher = fetcher or (lambda file_id: drive_fetcher(file_id, self._token))
+        drive = fetcher or (lambda file_id: drive_fetcher(file_id, self._token))
+        # Arquivos do disco são lidos direto, sem token.
+        self._fetcher = lambda file_id: (
+            local_fetcher(local_path(file_id)) if is_local_id(file_id) else drive(file_id)
+        )
 
     def basic(self, item: DriveItem, tags: dict | None, folder_name: str = "") -> TrackInfo:
         info = merge(from_tags(tags), from_filename(item.name))
@@ -472,12 +477,14 @@ class MetadataResolver:
         album_from_folder = "pasta" in info.sources and "album" not in {k.lower() for k in (tags or {})}
         out = Resolved(info=info)
 
-        cover = self._cached(f"embedded:{item.id}", lambda: embedded_cover(self._fetcher(item.id)))
+        cover = self._cached(f"embedded:{item.id}", lambda: embedded_cover(self._fetcher(item.id)),
+                             store=not is_local_id(item.id))
         if cover:
             out.cover, out.cover_source = cover, "arquivo"
         else:
             for img in folder_cover_candidates(siblings)[:2]:
-                cover = self._cached(f"drive:{img.id}", lambda img=img: self._fetcher(img.id)(0, 8 * 1024 * 1024 - 1))
+                cover = self._cached(f"drive:{img.id}", lambda img=img: self._fetcher(img.id)(0, 8 * 1024 * 1024 - 1),
+                                     store=not is_local_id(img.id))
                 if cover:
                     out.cover, out.cover_source = cover, "pasta"
                     break
@@ -499,7 +506,13 @@ class MetadataResolver:
                         out.cover_source = "cover art archive"
         return out
 
-    def _cached(self, key: str, compute: Callable[[], bytes | None]) -> bytes | None:
+    def _cached(self, key: str, compute: Callable[[], bytes | None], store: bool = True) -> bytes | None:
+        """store=False para arquivos locais: ler do disco já é rápido e o arquivo pode mudar."""
+        if not store:
+            try:
+                return compute()
+            except OSError:
+                return None
         if self.covers.has(key):
             return self.covers.get(key)
         try:

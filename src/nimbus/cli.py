@@ -14,6 +14,8 @@ from pathlib import Path
 
 from nimbus import __version__, auth
 from nimbus.drive import SHARED_NAME, Drive, DriveError
+from nimbus.library import Library
+from nimbus.local import LOCAL_ALIASES, LOCAL_NAME, LOCAL_ROOT, is_local, local_path, looks_local
 from nimbus.player import MpvError, MpvPlayer
 from nimbus.playback import Controller, PlayQueue
 
@@ -42,6 +44,23 @@ def _drive():
     return Drive.from_credentials(creds), creds
 
 
+def _library(ref: str | None = None, required: bool = False):
+    """Library com o Drive se houver login. Sem login, só o disco local funciona."""
+    ref = (ref or "").strip()
+    wants_local = looks_local(ref) or ref.casefold().rstrip("/") in LOCAL_ALIASES
+    try:
+        drive, creds = _drive()
+    except auth.NotLoggedIn as e:
+        if required or (ref and not wants_local):
+            raise
+        return Library(None, str(e)), None
+    return Library(drive), creds
+
+
+def _token(creds):
+    return (lambda: auth.access_token(creds)) if creds is not None else (lambda: "")
+
+
 def cmd_login(args) -> int:
     creds = auth.login(args.client_secret)
     print(f"Login feito como {Drive.from_credentials(creds).user_email()}.")
@@ -54,15 +73,20 @@ def cmd_logout(args) -> int:
 
 
 def cmd_ls(args) -> int:
-    drive, _ = _drive()
-    folder = drive.resolve_folder(args.folder)
-    print(f"{folder.name}  ({folder.id})")
+    library, _ = _library(args.folder, required=not args.folder)  # sem argumento = raiz do Drive
+    folder = library.resolve_folder(args.folder)
+    if folder.id == LOCAL_ROOT:
+        print(folder.name)
+    else:
+        print(f"{folder.name}  ({local_path(folder) if is_local(folder) else folder.id})")
     shown = 0
     if folder.id == "root":
         print(f"  📁 {SHARED_NAME}/")
         shown += 1
-    for item in drive.iter_children(folder.id):
-        if item.is_folder:
+    for item in library.iter_children(folder.id):
+        if item.is_folder and folder.id == LOCAL_ROOT:
+            print(f"  📁 {item.name}  ({local_path(item)})")
+        elif item.is_folder:
             print(f"  📁 {item.name}/")
         elif item.is_audio:
             print(f"  ♪  {item.name}  {_fmt_size(item.size)}")
@@ -120,17 +144,17 @@ def _status_line(ctl: Controller, paused: bool) -> str:
 
 
 def cmd_play(args) -> int:
-    drive, creds = _drive()
-    folder = drive.resolve_folder(args.folder)
+    library, creds = _library(args.folder)
+    folder = library.resolve_folder(args.folder)
     print(f"Lendo {folder.name}…", file=sys.stderr)
-    tracks = drive.list_audio(folder.id, recursive=args.recursive)
+    tracks = library.list_audio(folder.id, recursive=args.recursive)
     if not tracks:
         print("Nenhum arquivo de áudio nessa pasta." + ("" if args.recursive else " Tente --recursive."))
         return 1
     play_queue = PlayQueue(tracks, shuffle=args.shuffle)
 
     with MpvPlayer() as player:
-        ctl = Controller(player, play_queue, lambda: auth.access_token(creds))
+        ctl = Controller(player, play_queue, _token(creds))
         print(f"{len(tracks)} faixas. {HELP_KEYS}", file=sys.stderr)
         ctl.play_current()
         paused = False
@@ -184,14 +208,14 @@ def cmd_tui(args) -> int:
     from nimbus.metadata import MetadataResolver, OnlineLookup
     from nimbus.tui import NimbusApp, image_factory_from_env
 
-    drive, creds = _drive()
-    folder = drive.resolve_folder(args.folder) if args.folder else None
+    library, creds = _library(args.folder)
+    folder = library.resolve_folder(args.folder) if args.folder else None
     image_factory = image_factory_from_env()  # antes do Textual: consulta o terminal
-    token = lambda: auth.access_token(creds)  # noqa: E731
+    token = _token(creds)
     online = None if args.offline or os.environ.get("NIMBUS_OFFLINE") else OnlineLookup()
     resolver = MetadataResolver(token, online=online)
     with MpvPlayer() as player:
-        NimbusApp(drive, player, token, resolver, start_folder=folder, image_factory=image_factory).run()
+        NimbusApp(library, player, token, resolver, start_folder=folder, image_factory=image_factory).run()
     return 0
 
 
@@ -207,7 +231,7 @@ def cmd_complete(args) -> int:
     from nimbus.completion import FolderCache, complete
 
     try:
-        drive, _ = _drive()
+        drive = None if looks_local(args.partial) else _drive()[0]
         for path in complete(drive, args.partial, FolderCache()):
             print(path)
     except Exception:
@@ -216,7 +240,7 @@ def cmd_complete(args) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="nimbus", description="Toca em streaming as músicas das suas pastas do Google Drive.")
+    p = argparse.ArgumentParser(prog="nimbus", description="Toca as músicas das suas pastas do Google Drive (em streaming) e do seu computador.")
     p.add_argument("--version", action="version", version=f"nimbus {__version__}")
     sub = p.add_subparsers(dest="cmd", metavar="{tui,login,logout,ls,play,completion}")
 
@@ -229,7 +253,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_logout)
 
     folder_help = ("caminho em Meu Drive (ex.: 'Música/Rock') ou em 'Compartilhados comigo/…', "
-                   "URL ou ID da pasta; vazio = raiz")
+                   "URL ou ID da pasta, ou pasta do computador (ex.: ~/Música, /media/allan/HD, ./discos, "
+                   f"'{LOCAL_NAME}'); vazio = raiz do Drive")
     s = sub.add_parser("ls", help="lista pastas e músicas")
     s.add_argument("folder", nargs="?", default="", help=folder_help)
     s.add_argument("-a", "--all", action="store_true", help="mostra também arquivos que não são áudio")

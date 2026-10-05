@@ -1,4 +1,4 @@
-"""Autocomplete de caminhos de pastas do Drive para zsh e bash.
+"""Autocomplete de caminhos de pastas do Drive e do computador para zsh e bash.
 
 O shell chama `nimbus _complete <texto digitado>` a cada Tab e recebe um
 caminho candidato por linha. As listagens ficam num cache curto em disco para
@@ -14,6 +14,7 @@ import unicodedata
 from pathlib import Path
 
 from nimbus.drive import SHARED_NAME, Drive
+from nimbus.local import looks_local
 
 CACHE_TTL = 300  # segundos
 
@@ -56,9 +57,37 @@ class FolderCache:
             pass
 
 
-def complete(drive: Drive, partial: str, cache: FolderCache | None = None) -> list[str]:
+def complete_local(partial: str) -> list[str]:
+    """Pastas do computador; mantém o '~' ou o caminho relativo como foi digitado."""
+    if partial in ("~", ".", ".."):
+        return [partial + "/"]
+    head, _, prefix = partial.rpartition("/")
+    head = head + "/" if head or partial.startswith("/") else ""
+    base = os.path.expanduser(head) if head else "."
+    wanted = _norm(prefix)
+    try:
+        entries = sorted(os.scandir(base), key=lambda e: _norm(e.name))
+    except OSError:
+        return []
+    out = []
+    for entry in entries:
+        if entry.name.startswith(".") and not prefix.startswith("."):
+            continue
+        try:
+            if not entry.is_dir():
+                continue
+        except OSError:
+            continue
+        if _norm(entry.name).startswith(wanted):
+            out.append(f"{head}{entry.name}/")
+    return out
+
+
+def complete(drive: Drive | None, partial: str, cache: FolderCache | None = None) -> list[str]:
     """Caminhos de pastas que começam com `partial`, cada um terminando em '/'."""
     partial = unicodedata.normalize("NFC", partial)
+    if looks_local(partial):
+        return complete_local(partial)
     parent, _, prefix = partial.rpartition("/")
     key = _norm(parent.strip("/"))
     names = cache.get(key) if cache else None
