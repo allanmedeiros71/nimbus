@@ -91,6 +91,10 @@ O nimbus usa, nesta ordem, o que estiver disponível:
 4. Uma imagem na mesma pasta do Drive (`cover.jpg`, `folder.png`, `capa.jpg`…).
 5. [MusicBrainz](https://musicbrainz.org) para completar álbum, ano e gênero, e o [Cover Art Archive](https://coverartarchive.org) para a capa. Só artista, título e álbum são enviados. Use `--offline` ou `NIMBUS_OFFLINE=1` para desligar.
 
+Tags de propaganda (telefone, WhatsApp, links, como "DJ FULANO 62999999999 WHATSAPP") são ignoradas e o nome do arquivo assume; nesses arquivos a capa embutida também é ignorada.
+
+Cada música resolvida fica salva em `~/.cache/nimbus/tracks.json`, pelo ID do arquivo no Drive: da próxima vez, título, artista, álbum e capa corrigidos aparecem na hora, sem consultar o Drive nem a internet ("salvo" na linha de dados). Nada é gravado no Drive, que continua somente leitura. Se a internet falhar, a faixa é consultada de novo na próxima vez. Apague `tracks.json` para refazer tudo.
+
 Capas e respostas ficam em cache em `~/.cache/nimbus`. A linha "dados: … · capa: …" no painel mostra de onde veio cada coisa.
 
 A capa é desenhada com blocos coloridos, o que funciona em qualquer terminal com cores. Em terminais com imagens de verdade dá para pedir mais resolução: `NIMBUS_COVER=kitty` (kitty, Ghostty, WezTerm), `NIMBUS_COVER=sixel` (foot, WezTerm, Konsole, iTerm2) ou `NIMBUS_COVER=auto` para detectar. Se aparecer lixo no lugar da capa, volte para o padrão (`NIMBUS_COVER=blocks`). `NIMBUS_COVER=off` esconde a capa.

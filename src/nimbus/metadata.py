@@ -370,7 +370,7 @@ class OnlineLookup:
         except OSError:
             pass
 
-    def lookup(self, info: TrackInfo) -> OnlineResult | None:
+    def lookup(self, info: TrackInfo, errors: list | None = None) -> OnlineResult | None:
         if not info.title and not info.album:
             return None
         key = "|".join(x.casefold() for x in (info.artist, info.title, info.album))
@@ -380,7 +380,9 @@ class OnlineLookup:
                 return OnlineResult(**hit) if hit else None
         try:
             result = self._lookup(info)
-        except (OSError, ValueError, urllib.error.URLError):
+        except (OSError, ValueError, urllib.error.URLError) as e:
+            if errors is not None:
+                errors.append(e)
             return None  # sem internet ou resposta estranha: tenta de novo na próxima vez
         with self._lock:
             self._cache[key] = result.__dict__ if result else None
@@ -479,6 +481,47 @@ class Resolved:
     cover_source: str = ""
 
 
+class TrackStore:
+    """Metadados já corrigidos de cada faixa, por ID do arquivo no Drive.
+
+    Fica em ~/.cache/nimbus/tracks.json. Nada é gravado no Drive: o acesso
+    continua somente leitura. Apagar o arquivo faz tudo ser resolvido de novo.
+    """
+
+    VERSION = 1  # muda quando a lógica de correção mudar, para refazer as faixas
+
+    def __init__(self, path: Path | None = None):
+        self.path = path or cache_dir() / "tracks.json"
+        self._lock = threading.Lock()
+        try:
+            data = json.loads(self.path.read_text())
+            self._data = data.get("tracks", {}) if data.get("version") == self.VERSION else {}
+        except (OSError, ValueError, AttributeError):
+            self._data = {}
+
+    def get(self, file_id: str) -> dict | None:
+        with self._lock:
+            entry = self._data.get(file_id)
+            return dict(entry) if entry else None
+
+    def put(self, file_id: str, entry: dict) -> None:
+        with self._lock:
+            self._data[file_id] = entry
+            try:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                tmp = self.path.with_suffix(".tmp")
+                tmp.write_text(json.dumps({"version": self.VERSION, "tracks": self._data}, ensure_ascii=False))
+                tmp.replace(self.path)
+            except OSError:
+                pass
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+
+_INFO_FIELDS = ("title", "artist", "album", "genre", "year", "track")
+
+
 class MetadataResolver:
     def __init__(
         self,
@@ -486,14 +529,26 @@ class MetadataResolver:
         online: OnlineLookup | None = None,
         covers: CoverCache | None = None,
         fetcher: Callable[[str], Callable[[int, int], bytes]] | None = None,
+        store: TrackStore | None = None,
     ):
         self._token = token
         self.online = online
         self.covers = covers or CoverCache()
+        self.store = store if store is not None else TrackStore()
         self._fetcher = fetcher or (lambda file_id: drive_fetcher(file_id, self._token))
 
     def basic(self, item: DriveItem, tags: dict | None, folder_name: str = "") -> TrackInfo:
-        return self._basic(item, tags, folder_name)[0]
+        """O que dá para mostrar já: a correção salva, se a faixa já tocou, ou tags + nome do arquivo."""
+        known = self.known(item)
+        return known if known is not None else self._basic(item, tags, folder_name)[0]
+
+    def known(self, item: DriveItem) -> TrackInfo | None:
+        entry = self.store.get(item.id)
+        if not entry:
+            return None
+        info = TrackInfo(**{k: entry.get(k, "") for k in _INFO_FIELDS})
+        info.sources = list(entry.get("sources", [])) + ["salvo"]
+        return info
 
     def _basic(self, item: DriveItem, tags: dict | None, folder_name: str = "") -> tuple:
         from_file = from_filename(item.name)
@@ -506,25 +561,45 @@ class MetadataResolver:
 
     def resolve(self, item: DriveItem, tags: dict | None, siblings: Sequence[DriveItem] = (),
                 folder_name: str = "") -> Resolved:
+        """Metadados e capa corrigidos; a primeira vez consulta tudo e salva, as outras leem do disco."""
+        entry = self.store.get(item.id)
+        if entry and entry.get("complete"):
+            cover = self.covers.get(entry["cover_key"]) if entry.get("cover_key") else None
+            if cover or not entry.get("cover_key"):  # capa sumiu do cache: refaz
+                return Resolved(info=self.known(item), cover=cover, cover_source=entry.get("cover_source", ""))
+
+        errors: list = []
+        out, cover_key = self._resolve(item, tags, siblings, folder_name, errors)
+        entry = {k: getattr(out.info, k) for k in _INFO_FIELDS}
+        entry.update(sources=out.info.sources, cover_key=cover_key, cover_source=out.cover_source,
+                     complete=not errors)  # erro de rede: mostra o que salvou, mas tenta de novo depois
+        self.store.put(item.id, entry)
+        return out
+
+    def _resolve(self, item: DriveItem, tags: dict | None, siblings: Sequence[DriveItem],
+                 folder_name: str, errors: list) -> tuple:
         info, junk_tags = self._basic(item, tags, folder_name)
         album_from_folder = "pasta" in info.sources
         out = Resolved(info=info)
 
         # Quem grava propaganda nas tags costuma pôr a própria arte como capa.
+        cover_key = ""
+        key = f"embedded:{item.id}"
         cover = None if junk_tags else self._cached(
-            f"embedded:{item.id}", lambda: embedded_cover(self._fetcher(item.id)))
+            key, lambda: embedded_cover(self._fetcher(item.id)), errors)
         if cover:
-            out.cover, out.cover_source = cover, "arquivo"
+            out.cover, out.cover_source, cover_key = cover, "arquivo", key
         else:
             for img in folder_cover_candidates(siblings)[:2]:
-                cover = self._cached(f"drive:{img.id}", lambda img=img: self._fetcher(img.id)(0, 8 * 1024 * 1024 - 1))
+                key = f"drive:{img.id}"
+                cover = self._cached(key, lambda img=img: self._fetcher(img.id)(0, 8 * 1024 * 1024 - 1), errors)
                 if cover:
-                    out.cover, out.cover_source = cover, "pasta"
+                    out.cover, out.cover_source, cover_key = cover, "pasta", key
                     break
 
         if self.online is not None and (info.missing() or out.cover is None):
             query = replace(info, album="" if album_from_folder else info.album)
-            result = self.online.lookup(query)
+            result = self.online.lookup(query, errors)
             if result:
                 filled = TrackInfo(album=result.album, year=result.year, genre=result.genre,
                                    artist=result.artist, sources=["musicbrainz"])
@@ -534,17 +609,19 @@ class MetadataResolver:
                 out.info = merge(info, filled)
                 if out.cover is None:
                     key = f"caa:{result.release_group or result.release}"
-                    out.cover = self._cached(key, lambda: self.online.cover(result))
+                    out.cover = self._cached(key, lambda: self.online.cover(result), errors)
                     if out.cover:
-                        out.cover_source = "cover art archive"
-        return out
+                        out.cover_source, cover_key = "cover art archive", key
+        return out, cover_key
 
-    def _cached(self, key: str, compute: Callable[[], bytes | None]) -> bytes | None:
+    def _cached(self, key: str, compute: Callable[[], bytes | None], errors: list | None = None) -> bytes | None:
         if self.covers.has(key):
             return self.covers.get(key)
         try:
             data = compute()
-        except (OSError, urllib.error.URLError):
+        except (OSError, urllib.error.URLError) as e:
+            if errors is not None:
+                errors.append(e)
             return None  # erro de rede: não grava, tenta de novo depois
         self.covers.put(key, data)
         return data
