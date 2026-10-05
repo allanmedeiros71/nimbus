@@ -180,10 +180,30 @@ def cmd_play(args) -> int:
     return 0
 
 
+def cmd_completion(args) -> int:
+    from nimbus.completion import SCRIPTS
+
+    sys.stdout.write(SCRIPTS[args.shell])
+    return 0
+
+
+def cmd_complete(args) -> int:
+    """Usado pelos scripts de autocomplete; falhas não podem sujar o terminal."""
+    from nimbus.completion import FolderCache, complete
+
+    try:
+        drive, _ = _drive()
+        for path in complete(drive, args.partial, FolderCache()):
+            print(path)
+    except Exception:
+        pass
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="nimbus", description="Toca em streaming as músicas das suas pastas do Google Drive.")
     p.add_argument("--version", action="version", version=f"nimbus {__version__}")
-    sub = p.add_subparsers(dest="cmd", required=True)
+    sub = p.add_subparsers(dest="cmd", required=True, metavar="{login,logout,ls,play,completion}")
 
     s = sub.add_parser("login", help="autoriza o acesso somente leitura ao seu Drive")
     s.add_argument("--client-secret", type=lambda v: Path(v).expanduser(),
@@ -205,6 +225,14 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("-r", "--recursive", action="store_true", help="inclui subpastas")
     s.add_argument("-s", "--shuffle", action="store_true", help="ordem aleatória")
     s.set_defaults(func=cmd_play)
+
+    s = sub.add_parser("completion", help="imprime o script de autocomplete (zsh ou bash)")
+    s.add_argument("shell", choices=["zsh", "bash"])
+    s.set_defaults(func=cmd_completion)
+
+    s = sub.add_parser("_complete")
+    s.add_argument("partial", nargs="?", default="")
+    s.set_defaults(func=cmd_complete)
     return p
 
 
