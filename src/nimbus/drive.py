@@ -16,6 +16,12 @@ AUDIO_EXTENSIONS = {
     ".wav", ".aif", ".aiff", ".alac", ".wma", ".ape", ".wv", ".mka",
 }
 
+# Pasta virtual com o que outras pessoas compartilharam com você. A API não
+# tem um ID para ela: os itens vêm da consulta "sharedWithMe = true".
+SHARED_WITH_ME = "sharedWithMe"
+SHARED_NAME = "Compartilhados comigo"
+SHARED_ALIASES = {"compartilhados comigo", "shared with me", "@compartilhados", "@shared"}
+
 _FIELDS = "nextPageToken, files(id, name, mimeType, size, shortcutDetails)"
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{15,}$")
 _URL_ID_RE = re.compile(r"(?:/folders/|/file/d/|[?&]id=)([A-Za-z0-9_-]{15,})")
@@ -75,6 +81,10 @@ def parse_folder_ref(ref: str) -> str | None:
     return m.group(1) if m else None
 
 
+def shared_with_me() -> DriveItem:
+    return DriveItem(id=SHARED_WITH_ME, name=SHARED_NAME, mime_type=FOLDER_MIME)
+
+
 class Drive:
     def __init__(self, service):
         self._service = service
@@ -93,10 +103,14 @@ class Drive:
         return self._service.files()
 
     def iter_children(self, folder_id: str = "root") -> Iterator[DriveItem]:
+        if folder_id == SHARED_WITH_ME:
+            query = "sharedWithMe = true and trashed = false"
+        else:
+            query = f"{_quote(folder_id)} in parents and trashed = false"
         page_token = None
         while True:
             resp = self._files().list(
-                q=f"{_quote(folder_id)} in parents and trashed = false",
+                q=query,
                 fields=_FIELDS,
                 orderBy="folder,name_natural",
                 pageSize=1000,
@@ -152,9 +166,13 @@ class Drive:
         return None
 
     def resolve_path(self, path: str) -> DriveItem:
-        """Resolve 'Música/Rock' a partir da raiz de Meu Drive."""
+        """Resolve 'Música/Rock' a partir de Meu Drive, ou 'Compartilhados comigo/Rock'."""
+        parts = [p for p in path.strip("/").split("/") if p]
         current = DriveItem(id="root", name="Meu Drive", mime_type=FOLDER_MIME)
-        for part in [p for p in path.strip("/").split("/") if p]:
+        if parts and parts[0].casefold() in SHARED_ALIASES:
+            current = shared_with_me()
+            parts = parts[1:]
+        for part in parts:
             child = self.find_child_folder(current.id, part)
             if child is None:
                 raise DriveError(f"Pasta não encontrada: '{part}' dentro de '{current.name}'")
@@ -162,7 +180,7 @@ class Drive:
         return current
 
     def resolve_folder(self, ref: str | None) -> DriveItem:
-        """Aceita caminho em Meu Drive, URL de pasta do Drive ou ID de pasta."""
+        """Aceita caminho (em Meu Drive ou 'Compartilhados comigo/…'), URL de pasta do Drive ou ID de pasta."""
         ref = (ref or "").strip()
         if ref in ("", "/", "root"):
             return DriveItem(id="root", name="Meu Drive", mime_type=FOLDER_MIME)

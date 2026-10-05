@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 from nimbus import __version__, auth
-from nimbus.drive import Drive, DriveError
+from nimbus.drive import SHARED_NAME, Drive, DriveError
 from nimbus.player import MpvError, MpvPlayer
 from nimbus.playback import Controller, PlayQueue
 
@@ -58,6 +58,9 @@ def cmd_ls(args) -> int:
     folder = drive.resolve_folder(args.folder)
     print(f"{folder.name}  ({folder.id})")
     shown = 0
+    if folder.id == "root":
+        print(f"  📁 {SHARED_NAME}/")
+        shown += 1
     for item in drive.iter_children(folder.id):
         if item.is_folder:
             print(f"  📁 {item.name}/")
@@ -190,7 +193,8 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("logout", help="apaga o token salvo")
     s.set_defaults(func=cmd_logout)
 
-    folder_help = "caminho em Meu Drive (ex.: 'Música/Rock'), URL ou ID da pasta; vazio = raiz"
+    folder_help = ("caminho em Meu Drive (ex.: 'Música/Rock') ou em 'Compartilhados comigo/…', "
+                   "URL ou ID da pasta; vazio = raiz")
     s = sub.add_parser("ls", help="lista pastas e músicas")
     s.add_argument("folder", nargs="?", default="", help=folder_help)
     s.add_argument("-a", "--all", action="store_true", help="mostra também arquivos que não são áudio")

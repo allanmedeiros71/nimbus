@@ -62,13 +62,19 @@ nimbus ls "Música/Rock"            # caminho a partir de Meu Drive (maiúsculas
 nimbus ls https://drive.google.com/drive/folders/<id>   # URL ou ID de pasta, inclusive compartilhadas
 nimbus play "Música/Rock"          # toca a pasta em ordem
 nimbus play "Música" -r -s         # inclui subpastas, ordem aleatória
+
+nimbus ls "Compartilhados comigo"                 # o que outras pessoas compartilharam com você
+nimbus ls "Compartilhados comigo/Discos do Amigo"
+nimbus play "Compartilhados comigo/Discos do Amigo" -r
 ```
+
+"Compartilhados comigo" aparece como uma pasta na raiz do `nimbus ls`. Também aceita `Shared with me`, `@compartilhados` ou `@shared`, útil se você tiver uma pasta própria com esse nome. Pastas compartilhadas também podem ser abertas pela URL ou pelo ID, como qualquer outra.
 
 Teclas durante a reprodução: `espaço` pausa, `n` próxima, `p` anterior, `←`/`→` voltam ou avançam 10s, `+`/`-` volume, `q` sai.
 
 ## Como funciona
 
-- `drive.py` lista pastas e arquivos pela Drive API v3 (com suporte a drives compartilhados e atalhos). Áudio é detectado pelo tipo MIME ou pela extensão.
+- `drive.py` lista pastas e arquivos pela Drive API v3 (com suporte a drives compartilhados, "Compartilhados comigo" e atalhos). Áudio é detectado pelo tipo MIME ou pela extensão.
 - `player.py` inicia o mpv em modo ocioso e o controla pelo socket JSON IPC. Cada faixa é a URL `files/<id>?alt=media` da API, com o cabeçalho `Authorization: Bearer …` enviado pelo socket, nunca na linha de comando.
 - `playback.py` cuida da fila e pede um token renovado antes de cada faixa.
 - `cli.py` é a interface mínima de linha de comando.
