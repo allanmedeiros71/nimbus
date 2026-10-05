@@ -201,3 +201,43 @@ def test_online_result_roundtrip_in_cache(tmp_path):
     assert online.lookup(TrackInfo(title="Nada")) is None
     assert OnlineLookup(http=FakeHttp({}), cache=tmp_path).lookup(TrackInfo(title="Nada")) is None
     assert isinstance(OnlineResult(), OnlineResult)
+
+
+@pytest.mark.parametrize("value,junk", [
+    ("DEEJAYKADEIRA 62992131650 WHATSAPP", True),
+    ("Baixe em www.musicasgratis.com.br", True),
+    ("(62) 99213-1650", True),
+    ("@djfulano", True),
+    ("Gravado por DJ Fulano", True),
+    ("Insensível", False),
+    ("Greatest Hits 1990-2000", False),
+    ("Titãs", False),
+    ("Acústico MTV", False),
+])
+def test_is_junk_tag(value, junk):
+    from nimbus.metadata import is_junk_tag
+    assert is_junk_tag(value) is junk
+
+
+def test_spam_tags_fall_back_to_filename_and_skip_spam_cover(tmp_path):
+    item = DriveItem("f1", "16 Titas - INSENSIVEL.mp3", "audio/mpeg")
+    spam = "DEEJAYKADEIRA 62992131650 WHATSAPP"
+    tags = {"title": spam, "artist": spam, "album": "100 Mais Pop&Rock Brasil"}
+    resolver = MetadataResolver(lambda: "t", online=None, covers=CoverCache(tmp_path),
+                                fetcher=lambda fid: fetcher_for(mp3_with_cover()))
+    out = resolver.resolve(item, tags, folder_name="POP ROCK BRASIL")
+    assert (out.info.artist, out.info.title, out.info.track) == ("Titas", "INSENSIVEL", "16")
+    assert out.info.album == "100 Mais Pop&Rock Brasil"
+    assert out.cover is None  # a capa embutida era a arte do DJ
+
+
+def test_title_equal_to_artist_prefers_filename():
+    item = DriveItem("f1", "02 Titas - NAO VOU ME ADAPTAR.mp3", "audio/mpeg")
+    info = MetadataResolver(lambda: "t").basic(item, {"title": "Titas", "artist": "Titas"})
+    assert (info.artist, info.title) == ("Titas", "NAO VOU ME ADAPTAR")
+
+
+def test_good_tags_win_over_filename():
+    item = DriveItem("f1", "16 Titas - INSENSIVEL.mp3", "audio/mpeg")
+    info = MetadataResolver(lambda: "t").basic(item, {"title": "Insensível", "artist": "Titãs"})
+    assert (info.artist, info.title) == ("Titãs", "Insensível")
