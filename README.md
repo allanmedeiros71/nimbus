@@ -54,7 +54,48 @@ nimbus login
 
 O navegador abre pedindo permissão de leitura do Drive (`drive.readonly`). O token fica em `~/.config/nimbus/token.json`, legível só pelo seu usuário. `nimbus logout` apaga o token.
 
-## Uso
+## Interface visual
+
+```sh
+nimbus                      # abre a interface
+nimbus tui "Música/Rock"    # abre já com essa pasta selecionada
+nimbus tui --offline        # sem consultar MusicBrainz/Cover Art Archive
+```
+
+Em cima fica o painel **Playback**: capa do álbum, título • artista, álbum • gênero • ano, o ícone de tocando/pausado, repeat, shuffle, volume, a posição na fila e uma barra de progresso. Embaixo, **Directories**: a árvore de pastas (Meu Drive e Compartilhados comigo) à esquerda e o conteúdo da pasta selecionada à direita. `Enter` numa música toca a pasta inteira a partir dela.
+
+| Tecla | Ação |
+|---|---|
+| `espaço` | tocar / pausar |
+| `n` / `p` | próxima / anterior |
+| `>` `<` (ou `.` `,`) | avança / volta 10s |
+| `+` / `-` | volume |
+| `m` | mudo |
+| `r` | repeat: off → all → one |
+| `s` | shuffle (a faixa atual continua tocando) |
+| `j` / `k` | desce / sobe |
+| `h` / `l` | na árvore fecha/abre a pasta; na lista volta para a árvore/entra na pasta |
+| `g` / `G` | primeiro / último item |
+| `Tab` | alterna entre árvore e lista |
+| `Enter` | toca a música ou entra na subpasta |
+| `?` | ajuda |
+| `q` | sair |
+
+### Capa e metadados
+
+O nimbus usa, nesta ordem, o que estiver disponível:
+
+1. Tags do arquivo lidas pelo mpv (título, artista, álbum, gênero, ano).
+2. O nome do arquivo (`01 - Artista - Título.mp3`) e da pasta, quando faltam tags.
+3. A capa embutida no MP3 ou FLAC. Só o começo do arquivo é lido, onde a capa fica.
+4. Uma imagem na mesma pasta do Drive (`cover.jpg`, `folder.png`, `capa.jpg`…).
+5. [MusicBrainz](https://musicbrainz.org) para completar álbum, ano e gênero, e o [Cover Art Archive](https://coverartarchive.org) para a capa. Só artista, título e álbum são enviados. Use `--offline` ou `NIMBUS_OFFLINE=1` para desligar.
+
+Capas e respostas ficam em cache em `~/.cache/nimbus`. A linha "dados: … · capa: …" no painel mostra de onde veio cada coisa.
+
+A capa aparece em alta resolução em terminais com Sixel ou com o protocolo de imagens do kitty (iTerm2, WezTerm, kitty, foot, Konsole). Nos outros, como o Terminal do macOS, ela é desenhada com blocos coloridos. Se a imagem falhar no seu terminal, force os blocos com `NIMBUS_COVER=blocks nimbus`, ou esconda a capa com `NIMBUS_COVER=off`.
+
+## Linha de comando
 
 ```sh
 nimbus ls                          # raiz de Meu Drive
@@ -89,17 +130,19 @@ eval "$(nimbus completion bash)"
 
 Abra um terminal novo e teste com `nimbus ls Mú<Tab>`. Se você usa o venv, o `eval` só funciona quando o comando `nimbus` está no PATH; com o pipx isso vale para qualquer terminal. As listagens ficam em cache por 5 minutos em `~/.cache/nimbus`, então uma pasta recém-criada pode levar esse tempo para aparecer no `Tab`.
 
-Teclas durante a reprodução: `espaço` pausa, `n` próxima, `p` anterior, `←`/`→` voltam ou avançam 10s, `+`/`-` volume, `q` sai.
+Teclas durante o `nimbus play`: `espaço` pausa, `n` próxima, `p` anterior, `←`/`→` voltam ou avançam 10s, `+`/`-` volume, `q` sai.
 
 ## Como funciona
 
 - `drive.py` lista pastas e arquivos pela Drive API v3 (com suporte a drives compartilhados, "Compartilhados comigo" e atalhos). Áudio é detectado pelo tipo MIME ou pela extensão.
 - `player.py` inicia o mpv em modo ocioso e o controla pelo socket JSON IPC. Cada faixa é a URL `files/<id>?alt=media` da API, com o cabeçalho `Authorization: Bearer …` enviado pelo socket, nunca na linha de comando.
 - `playback.py` cuida da fila e pede um token renovado antes de cada faixa.
-- `cli.py` é a interface mínima de linha de comando.
+- `tui.py` é a interface visual (Textual). Os eventos do mpv chegam numa thread própria e a tela só lê o estado num timer, então rede e IPC não travam a interface.
+- `metadata.py` junta tags, nome do arquivo, capa embutida, imagem da pasta e MusicBrainz/Cover Art Archive.
+- `cli.py` tem os comandos de linha de comando e abre a interface quando não há comando.
 - `completion.py` gera os scripts de autocomplete e responde ao `Tab` com as pastas do Drive.
 
-Variáveis úteis: `NIMBUS_CONFIG_DIR` muda a pasta de configuração, `NIMBUS_MPV` aponta para outro executável do mpv.
+Variáveis úteis: `NIMBUS_CONFIG_DIR` muda a pasta de configuração, `NIMBUS_MPV` aponta para outro executável do mpv, `NIMBUS_COVER` escolhe como desenhar a capa (`auto`, `blocks`, `off`) e `NIMBUS_OFFLINE=1` desliga as consultas à internet.
 
 ## Testes
 
@@ -109,4 +152,4 @@ pip install -e '.[dev]'
 pytest
 ```
 
-Os testes de reprodução usam um mpv real e um servidor HTTP local que imita o Drive (exige o token e responde a requisições Range).
+Os testes de reprodução e da interface usam um mpv real e um servidor HTTP local que imita o Drive (exige o token e responde a requisições Range).
