@@ -118,6 +118,39 @@ def from_filename(name: str) -> TrackInfo:
     return TrackInfo(title=title, artist=artist, track=track, sources=["arquivo"])
 
 
+# Tags gravadas por quem distribuiu o arquivo ("DJ FULANO 62999999999 WHATSAPP",
+# "baixe em www.site.com") em vez dos dados da música.
+_JUNK_TAG = re.compile(
+    r"\d{9,}|\b\d{5}-\d{4}\b|\(\d{2}\)\s*\d"         # telefones
+    r"|whats\s*app|\bwpp\b|\bzap\b|telegram|instagram|facebook|tiktok|youtube"
+    r"|https?://|\bwww\.|\.com(?:\.br)?\b|\.net\b|@\w"  # links e perfis
+    r"|\bbaix(?:e|ar|ou)\b|\bdownload|\bcontato\b|\bgravad[oa]s?\b|\bpromo(?:cional)?\b",
+    re.IGNORECASE,
+)
+
+
+def is_junk_tag(value: str) -> bool:
+    return bool(value) and bool(_JUNK_TAG.search(value))
+
+
+def clean_tags(tags: TrackInfo, from_file: TrackInfo) -> tuple:
+    """Descarta tags que são propaganda. Devolve (tags limpas, se havia lixo)."""
+    out = replace(tags, sources=list(tags.sources))
+    junk = False
+    for attr in ("title", "artist", "album", "genre"):
+        if is_junk_tag(getattr(out, attr)):
+            setattr(out, attr, "")
+            junk = True
+    # Título igual ao artista é sinal de tag preenchida no automático; se o nome
+    # do arquivo traz "Artista - Título", ele é mais confiável.
+    if out.title and out.title.casefold() == out.artist.casefold() and from_file.artist:
+        out.title = out.artist = ""
+        junk = True
+    if not any(getattr(out, a) for a in ("title", "artist", "album", "genre", "year")):
+        out.sources = [x for x in out.sources if x != "tags"]
+    return out, junk
+
+
 def merge(primary: TrackInfo, fallback: TrackInfo) -> TrackInfo:
     """Preenche os campos vazios de primary com os de fallback."""
     out = replace(primary, sources=list(primary.sources))
@@ -460,19 +493,26 @@ class MetadataResolver:
         self._fetcher = fetcher or (lambda file_id: drive_fetcher(file_id, self._token))
 
     def basic(self, item: DriveItem, tags: dict | None, folder_name: str = "") -> TrackInfo:
-        info = merge(from_tags(tags), from_filename(item.name))
+        return self._basic(item, tags, folder_name)[0]
+
+    def _basic(self, item: DriveItem, tags: dict | None, folder_name: str = "") -> tuple:
+        from_file = from_filename(item.name)
+        tag_info, junk = clean_tags(from_tags(tags), from_file)
+        info = merge(tag_info, from_file)
         if not info.album and folder_name:
             info.album = folder_name
             info.sources.append("pasta")
-        return info
+        return info, junk
 
     def resolve(self, item: DriveItem, tags: dict | None, siblings: Sequence[DriveItem] = (),
                 folder_name: str = "") -> Resolved:
-        info = self.basic(item, tags, folder_name)
-        album_from_folder = "pasta" in info.sources and "album" not in {k.lower() for k in (tags or {})}
+        info, junk_tags = self._basic(item, tags, folder_name)
+        album_from_folder = "pasta" in info.sources
         out = Resolved(info=info)
 
-        cover = self._cached(f"embedded:{item.id}", lambda: embedded_cover(self._fetcher(item.id)))
+        # Quem grava propaganda nas tags costuma pôr a própria arte como capa.
+        cover = None if junk_tags else self._cached(
+            f"embedded:{item.id}", lambda: embedded_cover(self._fetcher(item.id)))
         if cover:
             out.cover, out.cover_source = cover, "arquivo"
         else:
