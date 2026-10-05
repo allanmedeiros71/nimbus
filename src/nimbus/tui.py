@@ -46,7 +46,7 @@ HELP_TEXT = """\
 
 [b]Navegação (estilo vim)[/b]
   j  k         desce / sobe
-  h  l         na árvore: fecha / abre a pasta
+  h  l         na árvore: fecha ou sobe / abre a pasta (Drive: lista só aqui)
                na lista: volta para a árvore / abre a pasta
   g  G         primeiro / último item
   Tab          alterna entre árvore e lista
@@ -165,18 +165,17 @@ class FolderTree(Tree):
         node = self.cursor_node
         if node is None:
             return
+        already_shown = self.app.open_folder(node)
         if node.allow_expand and not node.is_expanded:
             node.expand()
-        elif node.children:
-            self.move_cursor(node.children[0])
-        else:
+        elif already_shown:
             self.app.query_one(TrackTable).focus()
 
     def action_close(self) -> None:
         node = self.cursor_node
         if node is None:
             return
-        if node.is_expanded:
+        if node.is_expanded and node.children:  # sem subpastas, fechar não muda nada: sobe
             node.collapse()
         elif node.parent is not None and node.parent is not self.root:
             self.move_cursor(node.parent)
@@ -260,8 +259,14 @@ class NimbusApp(App):
         resolver: MetadataResolver,
         start_folder: Optional[DriveItem] = None,
         image_factory: Optional[Callable] = None,
+        is_remote: Optional[Callable[[DriveItem], bool]] = None,
     ):
         super().__init__()
+        # Pastas remotas (Drive, e no futuro OneDrive) só são listadas no painel
+        # da direita com Enter ou →, para não gastar banda nem chamadas de API
+        # a cada passo na árvore. Pastas locais aparecem enquanto se navega.
+        self.is_remote = is_remote or (lambda item: True)
+        self._opened: set[str] = set()  # pastas remotas que o usuário pediu para abrir
         self.drive = drive
         self.player = player
         self.token = token
@@ -333,7 +338,7 @@ class NimbusApp(App):
         nodes[0].expand()
         tree.move_cursor(nodes[0])
         tree.focus()
-        self._show_folder(nodes[0])  # o cursor já está na linha 0: não há evento de destaque
+        self.open_folder(nodes[0])  # o cursor já está na linha 0: não há evento de destaque
 
         try:
             self.player.observe("pause", "volume", "mute", "time-pos", "duration")
@@ -415,7 +420,35 @@ class NimbusApp(App):
         if self._show_timer is not None:
             self._show_timer.stop()
         node = event.node
-        self._show_timer = self.set_timer(0.15, lambda: self._show_folder(node))
+        self._show_timer = self.set_timer(0.15, lambda: self._preview_folder(node))
+
+    @on(Tree.NodeSelected)
+    def _on_select(self, event: Tree.NodeSelected) -> None:
+        if event.node.data is not None:
+            self.open_folder(event.node)
+
+    def open_folder(self, node: TreeNode) -> bool:
+        """Enter ou →: mostra o conteúdo da pasta. Devolve True se ele já estava na tela."""
+        item: DriveItem = node.data
+        if item is None:
+            return False
+        self._opened.add(item.id)
+        if self._shown_folder == item.id:
+            return True
+        self._show_folder(node)
+        return False
+
+    def _preview_folder(self, node: TreeNode) -> None:
+        """Cursor parou numa pasta: local mostra já; remota só se já foi listada ou aberta."""
+        item: DriveItem = node.data
+        if not self.is_remote(item) or item.id in self._listings or item.id in self._opened:
+            self._show_folder(node)
+            return
+        table = self.query_one(TrackTable)
+        table.border_title = self._node_path(node)
+        table.clear()
+        table.add_row("", Text("Enter ou → para abrir esta pasta", style="dim italic"), "")
+        self._shown_folder = None
 
     def _show_folder(self, node: TreeNode) -> None:
         item: DriveItem = node.data
@@ -502,6 +535,7 @@ class NimbusApp(App):
         tree = self.query_one(FolderTree)
         for child in node.children:
             if child.data is not None and child.data.id == folder_id:
+                self._opened.add(folder_id)  # Enter na lista é pedido explícito
                 tree.move_cursor(child)
                 tree.scroll_to_node(child)
                 return

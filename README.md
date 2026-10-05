@@ -62,7 +62,7 @@ nimbus tui "Música/Rock"    # abre já com essa pasta selecionada
 nimbus tui --offline        # sem consultar MusicBrainz/Cover Art Archive
 ```
 
-Em cima fica o painel **Playback**: capa do álbum, título • artista, álbum • gênero • ano, o ícone de tocando/pausado, repeat, shuffle, volume, a posição na fila e uma barra de progresso. Embaixo, **Directories**: a árvore de pastas (Meu Drive e Compartilhados comigo) à esquerda e o conteúdo da pasta selecionada à direita. `Enter` numa música toca a pasta inteira a partir dela.
+Em cima fica o painel **Playback**: capa do álbum, título • artista, álbum • gênero • ano, o ícone de tocando/pausado, repeat, shuffle, volume, a posição na fila e uma barra de progresso. Embaixo, **Directories**: a árvore de pastas (Meu Drive e Compartilhados comigo) à esquerda e o conteúdo da pasta selecionada à direita. `Enter` numa música toca a pasta inteira a partir dela. Para economizar banda e chamadas à API, uma pasta do Drive só é listada à direita quando você aperta `Enter` ou `→`/`l` nela; pastas já abertas aparecem na hora.
 
 | Tecla | Ação |
 |---|---|
@@ -74,7 +74,7 @@ Em cima fica o painel **Playback**: capa do álbum, título • artista, álbum 
 | `r` | repeat: off → all → one |
 | `s` | shuffle (a faixa atual continua tocando) |
 | `j` / `k` | desce / sobe |
-| `h` / `l` | na árvore fecha/abre a pasta; na lista volta para a árvore/entra na pasta |
+| `h` / `l` | na árvore fecha a pasta ou sobe / abre a pasta (e, se já aberta, vai para a lista); na lista volta para a árvore / entra na pasta |
 | `g` / `G` | primeiro / último item |
 | `Tab` | alterna entre árvore e lista |
 | `Enter` | toca a música ou entra na subpasta |
