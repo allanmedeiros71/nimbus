@@ -204,3 +204,40 @@ def test_tui_without_login_shows_this_computer(music, monkeypatch, tmp_path):
                 await pilot.press("q")
 
     asyncio.run(scenario())
+
+
+@needs_mpv
+def test_tui_previews_local_folders_but_not_drive(music, monkeypatch, tmp_path):
+    from nimbus.player import MpvPlayer
+    from nimbus.tui import NimbusApp, TrackTable
+
+    from test_tui import wait_until
+
+    class FakeDrive:
+        calls = []
+
+        def iter_children(self, folder_id):
+            self.calls.append(folder_id)
+            return iter([])
+
+    monkeypatch.setattr(local, "local_places", lambda platform=None: [local.local_item(music.parent, "Pasta pessoal")])
+    drive = FakeDrive()
+    lib = Library(drive)
+    resolver = MetadataResolver(lambda: "", online=None, covers=CoverCache(tmp_path / "covers"),
+                                store=TrackStore(tmp_path / "t.json"))
+
+    async def scenario():
+        with MpvPlayer(extra_args=["--ao=null"]) as player:
+            app = NimbusApp(lib, player, lambda: "", resolver, image_factory=None)
+            async with app.run_test(size=(110, 32)) as pilot:
+                tree = app.query_one("#tree")
+                table = app.query_one(TrackTable)
+                assert [n.data.name for n in tree.root.children] == [
+                    "Meu Drive", "Compartilhados comigo", "Este computador"]
+                await pilot.press("j", "j")  # passa por "Compartilhados comigo" sem abrir
+                assert tree.cursor_node.data.name == "Este computador"
+                assert await wait_until(pilot, lambda: table.row_count == 1
+                                        and "Pasta pessoal" in str(table.get_row_at(0)[1]))
+                assert "sharedWithMe" not in drive.calls
+
+    asyncio.run(scenario())

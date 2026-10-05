@@ -170,18 +170,51 @@ def test_vim_keys_in_tree(setup):
             tree = app.query_one("#tree")
             table = app.query_one(TrackTable)
             assert await wait_until(pilot, lambda: len(tree.cursor_node.children) == 2)
-            await pilot.press("l")  # já aberta: desce para a primeira subpasta
+
+            # Pasta do Drive: passar pelo cursor não lista nada.
+            await pilot.press("j")
             assert tree.cursor_node.data.id == "rock"
+            await pilot.pause(0.4)
+            assert "rock" not in drive.calls
+            assert "Enter ou →" in str(table.get_row_at(0)[1])
+
+            await pilot.press("l")  # → abre
             assert await wait_until(pilot, lambda: [r.value for r in table.rows] == ["t1", "t2"])
+            assert drive.calls.count("rock") == 1
+            await pilot.press("l")  # já aberta: vai para a lista
+            assert app.focused is table
+            await pilot.press("h")
+            assert app.focused is tree
+
             await pilot.press("j")
             assert tree.cursor_node.data.id == "jazz"
-            await pilot.press("l")  # abre Jazz (vazia)
+            await pilot.press("enter")  # Enter também abre
             assert await wait_until(pilot, lambda: "nenhuma" in str(table.get_row_at(0)[1]))
-            await pilot.press("h")  # vazia e sem filhos: sobe para o pai
+
+            # Voltar a uma pasta já listada mostra na hora, sem nova chamada.
+            await pilot.press("k")
+            assert await wait_until(pilot, lambda: [r.value for r in table.rows] == ["t1", "t2"])
+            assert drive.calls.count("rock") == 1
+
             await pilot.press("h")
             assert tree.cursor_node.data.id == "root"
             await pilot.press("G")
             assert tree.cursor_node.data.name == "Este computador"
+
+    asyncio.run(scenario())
+
+
+def test_local_folders_preview_while_navigating(setup):
+    drive, player, resolver = setup
+
+    async def scenario():
+        app = NimbusApp(drive, player, lambda: TOKEN, resolver, image_factory=None, is_remote=lambda item: False)
+        async with app.run_test(size=(110, 32)) as pilot:
+            tree = app.query_one("#tree")
+            table = app.query_one(TrackTable)
+            assert await wait_until(pilot, lambda: len(tree.cursor_node.children) == 2)
+            await pilot.press("j")
+            assert await wait_until(pilot, lambda: [r.value for r in table.rows] == ["t1", "t2"])
 
     asyncio.run(scenario())
 
