@@ -9,10 +9,31 @@ Player de terminal (Linux e macOS) que toca em streaming as músicas das suas pa
 
 ## Instalação
 
+Em muitos sistemas (macOS com Homebrew, Debian/Ubuntu recentes) não existe o comando `pip` solto, só `python3 -m pip`, e instalar pacotes no Python do sistema é bloqueado. Por isso use um ambiente virtual ou o pipx.
+
+### Opção 1: ambiente virtual dentro da pasta do projeto
+
 ```sh
-pipx install git+https://github.com/<seu-usuario>/nimbus
-# ou, a partir do código:
+git clone git@github.com:allanmedeiros71/nimbus.git
+cd nimbus
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -e .
+nimbus login
+```
+
+Com o ambiente ativado, `pip` e `nimbus` funcionam normalmente. Em um terminal novo, rode `source .venv/bin/activate` de novo antes de usar o `nimbus`.
+
+### Opção 2: pipx, para ter o comando `nimbus` em qualquer terminal
+
+```sh
+brew install pipx          # macOS
+sudo apt install pipx      # Debian/Ubuntu
+pipx ensurepath            # depois abra um terminal novo
+
+pipx install -e .          # dentro da pasta clonada
+# ou direto do GitHub:
+pipx install git+ssh://git@github.com/allanmedeiros71/nimbus.git
 ```
 
 ## Credenciais do Google (uma vez só)
@@ -57,6 +78,7 @@ Variáveis úteis: `NIMBUS_CONFIG_DIR` muda a pasta de configuração, `NIMBUS_M
 ## Testes
 
 ```sh
+source .venv/bin/activate
 pip install -e '.[dev]'
 pytest
 ```
