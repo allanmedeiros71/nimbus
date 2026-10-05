@@ -494,6 +494,11 @@ class NimbusApp(App):
             self._select_after_load = (node.id, folder.id)
 
     def _move_to_child(self, node: TreeNode, folder_id: str) -> None:
+        # Nós recém-criados só ganham linha (node._line) depois que a árvore se
+        # redesenha; mover antes disso jogaria o cursor para o topo.
+        self.call_after_refresh(self._move_to_child_now, node, folder_id)
+
+    def _move_to_child_now(self, node: TreeNode, folder_id: str) -> None:
         tree = self.query_one(FolderTree)
         for child in node.children:
             if child.data is not None and child.data.id == folder_id:
