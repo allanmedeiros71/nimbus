@@ -745,20 +745,62 @@ class NimbusApp(App):
         self._marked_id = self.playing_id
 
 
-def image_factory_from_env() -> Optional[Callable]:
-    """Escolhe como desenhar a capa. NIMBUS_COVER=auto (padrão), blocks ou off.
+class BlockImage(Widget):
+    """Capa desenhada com meios-blocos (▀) coloridos: funciona em qualquer terminal com cores."""
 
-    Precisa rodar antes do Textual assumir o terminal: o textual-image pergunta
-    ao terminal se ele aceita Sixel ou o protocolo de imagens do kitty.
+    def __init__(self, image, **kw):
+        super().__init__(**kw)
+        self._image = image.convert("RGB")
+        self._cache: tuple = ((0, 0), None)
+
+    def render(self) -> Text:
+        w, h = self.size.width, self.size.height
+        if self._cache[0] != (w, h):
+            self._cache = ((w, h), self._draw(w, h))
+        return self._cache[1]
+
+    def _draw(self, w: int, h: int) -> Text:
+        text = Text()
+        if w <= 0 or h <= 0:
+            return text
+        from PIL import Image
+
+        img = self._image.resize((w, h * 2), Image.LANCZOS)
+        px = img.load()
+        for y in range(h):
+            for x in range(w):
+                top, bottom = px[x, 2 * y], px[x, 2 * y + 1]
+                text.append("▀", f"rgb({top[0]},{top[1]},{top[2]}) on rgb({bottom[0]},{bottom[1]},{bottom[2]})")
+            if y < h - 1:
+                text.append("\n")
+        return text
+
+
+def image_factory_from_env() -> Optional[Callable]:
+    """Escolhe como desenhar a capa pela variável NIMBUS_COVER.
+
+    blocks (padrão): meios-blocos coloridos, funciona em qualquer terminal.
+    auto: deixa o textual-image escolher Sixel ou o protocolo do kitty, se o
+          terminal disser que aceita. Alguns terminais dizem que aceitam e
+          mostram lixo, por isso não é o padrão.
+    sixel, kitty: força um desses protocolos.
+    off: sem capa.
+
+    Precisa rodar antes do Textual assumir o terminal, porque o textual-image
+    consulta o terminal ao ser importado.
     """
-    mode = os.environ.get("NIMBUS_COVER", "auto").lower()
+    mode = os.environ.get("NIMBUS_COVER", "blocks").strip().lower()
     if mode in ("off", "none", "0"):
         return None
+    if mode not in ("auto", "sixel", "kitty", "tgp"):
+        return BlockImage
     try:
-        if mode in ("blocks", "halfcell"):
-            from textual_image.widget import HalfcellImage as ImageWidget
+        if mode == "sixel":
+            from textual_image.widget import SixelImage as ImageWidget
+        elif mode in ("kitty", "tgp"):
+            from textual_image.widget import TGPImage as ImageWidget
         else:
             from textual_image.widget import Image as ImageWidget
     except Exception:
-        return None
+        return BlockImage
     return ImageWidget
