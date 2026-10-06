@@ -1,12 +1,14 @@
 # Backlog
 
-Ideias combinadas para versões futuras do nimbus.
+**English** · [Português](ROADMAP.pt-BR.md)
 
-## Gravar as correções de metadados nos arquivos
+Ideas agreed on for future versions of nimbus.
 
-Hoje as correções (título, artista, álbum, gênero, ano e capa) ficam só em `~/.cache/nimbus/tracks.json`. A ideia é poder gravá-las nas tags dos próprios MP3/FLAC no Drive, trocando também a capa de propaganda pela capa certa.
+## Write metadata corrections into the files
 
-- Exige um escopo de escrita no Drive (`drive.file` não basta para arquivos existentes; seria `drive`), pedido só quando o usuário ativar o recurso. O padrão continua `drive.readonly`.
-- Gravar só depois de confirmação, faixa a faixa ou por pasta, mostrando antes o que muda.
-- O Drive guarda versões anteriores do arquivo, o que permite desfazer.
-- Reaproveitar `tracks.json` como fonte das correções.
+Today the corrections (title, artist, album, genre, year and cover) live only in `~/.cache/nimbus/tracks.json`. The idea is to be able to write them into the tags of the MP3/FLAC files on Drive themselves, also replacing advertising covers with the right one.
+
+- Requires a Drive write scope (`drive.file` is not enough for existing files; it would have to be `drive`), requested only when the user turns the feature on. The default stays `drive.readonly`.
+- Write only after confirmation, track by track or per folder, showing what changes first.
+- Drive keeps previous versions of the file, which allows undoing.
+- Reuse `tracks.json` as the source of the corrections.
