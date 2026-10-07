@@ -333,14 +333,16 @@ class NimbusApp(App):
         table.border_title = "—"
 
         roots = []
-        if self.start_folder is not None and self.start_folder.id not in ("root",):
+        explicit_start = self.start_folder is not None and self.start_folder.id not in ("root",)
+        if explicit_start:
             roots.append(self.start_folder)
         if getattr(self.drive, "has_drive", True):
             roots += [DriveItem(id="root", name="Meu Drive", mime_type=FOLDER_MIME), shared_with_me()]
         roots.append(local_root())
         nodes = [tree.root.add(self._folder_label(item), data=item, allow_expand=True) for item in roots]
         tree.root.expand()
-        nodes[0].expand()
+        if explicit_start:  # "Meu Drive" e as demais raízes começam fechadas (issue #9)
+            nodes[0].expand()
         tree.move_cursor(nodes[0])
         tree.focus()
         self.open_folder(nodes[0])  # o cursor já está na linha 0: não há evento de destaque

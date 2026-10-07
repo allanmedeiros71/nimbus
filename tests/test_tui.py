@@ -99,7 +99,7 @@ def test_browse_and_play(setup):
         app = NimbusApp(drive, player, lambda: TOKEN, resolver, image_factory=None)
         async with app.run_test(size=(110, 32)) as pilot:
             table = app.query_one(TrackTable)
-            # Meu Drive abre sozinho: pastas na árvore, pastas e áudio na lista (o PDF some).
+            # Meu Drive começa fechado na árvore, mas a lista já mostra pastas e áudio (o PDF some).
             assert await wait_until(pilot, lambda: table.row_count == 2)
             assert [r.value for r in table.rows] == ["rock", "jazz"]
 
@@ -169,6 +169,10 @@ def test_vim_keys_in_tree(setup):
         async with app.run_test(size=(110, 32)) as pilot:
             tree = app.query_one("#tree")
             table = app.query_one(TrackTable)
+            # Meu Drive começa fechado (issue #9); → abre e mostra as subpastas.
+            assert await wait_until(pilot, lambda: table.row_count == 2)
+            assert not tree.cursor_node.is_expanded
+            await pilot.press("l")
             assert await wait_until(pilot, lambda: len(tree.cursor_node.children) == 2)
 
             # Pasta do Drive: passar pelo cursor não lista nada.
@@ -212,6 +216,10 @@ def test_local_folders_preview_while_navigating(setup):
         async with app.run_test(size=(110, 32)) as pilot:
             tree = app.query_one("#tree")
             table = app.query_one(TrackTable)
+            # Meu Drive começa fechado (issue #9); → abre e mostra as subpastas.
+            assert await wait_until(pilot, lambda: table.row_count == 2)
+            assert not tree.cursor_node.is_expanded
+            await pilot.press("l")
             assert await wait_until(pilot, lambda: len(tree.cursor_node.children) == 2)
             await pilot.press("j")
             assert await wait_until(pilot, lambda: [r.value for r in table.rows] == ["t1", "t2"])
