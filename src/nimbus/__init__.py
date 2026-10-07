@@ -1,3 +1,8 @@
 """nimbus: toca em streaming as músicas das suas pastas do Google Drive."""
 
-__version__ = "0.3.1"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("nimbus-player")
+except PackageNotFoundError:  # rodando direto do código, sem instalar
+    __version__ = "0.0.0"

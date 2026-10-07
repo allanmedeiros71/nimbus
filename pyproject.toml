@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=64", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -39,8 +39,9 @@ dev = ["pytest>=7"]
 [project.scripts]
 nimbus = "nimbus.cli:main"
 
-[tool.setuptools.dynamic]
-version = { attr = "nimbus.__version__" }
+# A versão vem da tag do git (v0.3.1 -> 0.3.1); entre tags vira algo como 0.3.2.dev3.
+[tool.setuptools_scm]
+fallback_version = "0.0.0"
 
 [tool.setuptools.packages.find]
 where = ["src"]

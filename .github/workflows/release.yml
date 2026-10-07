@@ -11,16 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # o setuptools-scm tira a versão das tags
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Conferir tag x versão
-        run: |
-          version=$(python -c "import re,pathlib;print(re.search(r'__version__ = \"(.+)\"', pathlib.Path('src/nimbus/__init__.py').read_text()).group(1))")
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::A tag $GITHUB_REF_NAME não bate com __version__ = $version"
-            exit 1
-          fi
       - name: Testes
         run: |
           sudo apt-get update && sudo apt-get install -y mpv
@@ -31,6 +26,11 @@ jobs:
           pip install build twine
           python -m build
           twine check dist/*
+          version=${GITHUB_REF_NAME#v}
+          if [ ! -f "dist/nimbus_player-$version.tar.gz" ]; then
+            echo "::error::O pacote não saiu com a versão $version da tag: $(ls dist)"
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: dist
