@@ -203,8 +203,7 @@ Os testes de reprodução e da interface usam um mpv real e um servidor HTTP loc
 
 ## Publicar uma versão
 
-1. Suba o número em `src/nimbus/__init__.py` (`__version__`) e faça o merge no `main`.
-2. Crie e envie a tag: `git tag v0.3.0 && git push origin v0.3.0`.
+Basta criar e enviar a tag no `main`: `git tag v0.3.2 && git push origin v0.3.2`. O número da versão vem da própria tag (pelo [setuptools-scm](https://setuptools-scm.readthedocs.io)), então não há número para editar no código.
 
 O workflow `release` roda os testes, publica `nimbus-player` no PyPI, cria o GitHub Release com os pacotes e atualiza `Formula/nimbus.rb` no repositório [homebrew-tap](https://github.com/allanmedeiros71/homebrew-tap). A fórmula é gerada por `scripts/homebrew_formula.py`.
 
