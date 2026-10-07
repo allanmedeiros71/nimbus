@@ -249,7 +249,8 @@ def test_tui_without_login_shows_this_computer(music, monkeypatch, tmp_path):
                                         and table.row_count == 3)
                 await pilot.press("tab", "tab", "j", "enter")  # toca "2 - Banda - Dois.mp3"
                 assert await wait_until(pilot, lambda: "Faixa Dois" in text_of(app, "#pb-title"))
-                assert await wait_until(pilot, lambda: "capa: arquivo" in text_of(app, "#pb-source"))
+                # capa.jpg da pasta ganha da capa embutida (issue #11)
+                assert await wait_until(pilot, lambda: "capa: pasta" in text_of(app, "#pb-source"))
                 await pilot.press("q")
 
     asyncio.run(scenario())

@@ -257,3 +257,53 @@ def test_cover_mode_defaults_to_blocks(monkeypatch):
     assert image_factory_from_env() is None
     monkeypatch.setenv("NIMBUS_COVER", "qualquer-coisa")
     assert image_factory_from_env() is BlockImage
+
+
+def test_cover_mode_iterm(monkeypatch):
+    from nimbus.iterm import ITermImage
+
+    monkeypatch.setenv("NIMBUS_COVER", "iterm")
+    assert image_factory_from_env() is ITermImage
+    monkeypatch.setenv("NIMBUS_COVER", "auto")
+    monkeypatch.setenv("TERM_PROGRAM", "WezTerm")
+    assert image_factory_from_env() is ITermImage
+
+
+def test_iterm_cover_draws_osc_1337(setup):
+    from nimbus.iterm import ITermImage, _ITermImpl
+
+    drive, player, resolver = setup
+
+    async def scenario():
+        app = NimbusApp(drive, player, lambda: TOKEN, resolver, image_factory=ITermImage)
+        async with app.run_test(size=(110, 32)) as pilot:
+            cover = app.query_one(CoverArt)
+            app.start_playback(ROCK, [T1, T2], [T1, T2], 0)
+            assert await wait_until(pilot, lambda: cover.has_image)
+            await pilot.pause(0.2)
+            impl = cover.query_one(_ITermImpl)
+            lines = impl.render_lines(impl.region.reset_offset)
+            raw = "".join(seg.text for line in lines for seg in line)
+            assert "\x1b]1337;File=inline=1;" in raw and raw.count("\x07") == 1
+
+    asyncio.run(scenario())
+
+
+def test_cover_mode_auto_inside_tmux(monkeypatch):
+    from nimbus.iterm import ITermImage
+
+    for var in ("TERM_PROGRAM", "WEZTERM_PANE", "WEZTERM_EXECUTABLE", "LC_TERMINAL"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("NIMBUS_COVER", "auto")
+    monkeypatch.setenv("TERM_PROGRAM", "tmux")
+    monkeypatch.setenv("WEZTERM_PANE", "3")
+    assert image_factory_from_env() is ITermImage
+
+
+def test_tmux_passthrough_positions_the_image():
+    from nimbus.iterm import tmux_passthrough
+
+    seq = tmux_passthrough("\x1b]1337;File=inline=1:QUJD\x07", 40, 2)
+    assert seq.startswith("\x1bPtmux;") and seq.endswith("\x1b\\")
+    inner = seq[len("\x1bPtmux;"):-2].replace("\x1b\x1b", "\x1b")
+    assert inner == "\x1b7\x1b[3;41H\x1b]1337;File=inline=1:QUJD\x07\x1b8"
