@@ -6,19 +6,30 @@ Uso: python scripts/homebrew_formula.py 0.3.0 > nimbus.rb
 Resolve as dependências com o pip (sem instalar nada) e escreve um bloco
 `resource` por pacote, apontando para o sdist no PyPI. Pacotes que o Homebrew
 já oferece como fórmula (com partes compiladas) viram `depends_on`.
+
+O Homebrew compila cada resource a partir do código-fonte, inclusive o backend
+de build. Backends escritos em Rust (uv_build, maturin) não compilam ali, então
+esses pacotes, quando são Python puro, entram pelo wheel `py3-none-any`, que o
+Homebrew instala direto.
 """
 
 from __future__ import annotations
 
+import io
 import json
+import re
 import subprocess
 import sys
+import tarfile
 import tempfile
 import urllib.request
 from pathlib import Path
 
 PACKAGE = "nimbus-player"
 PYTHON = "python@3.14"
+
+# Backends de build que precisam de Rust para serem compilados.
+RUST_BACKENDS = {"uv_build", "maturin"}
 
 # Pacotes do PyPI que vêm de fórmulas do Homebrew em vez de resources.
 FROM_HOMEBREW = {
@@ -56,14 +67,41 @@ def normalize(name: str) -> str:
     return name.lower().replace("_", "-").replace(".", "-")
 
 
+def files(name: str, version: str) -> list[dict]:
+    with urllib.request.urlopen(f"https://pypi.org/pypi/{name}/{version}/json") as r:
+        return json.load(r)["urls"]
+
+
 def sdist(name: str, version: str) -> tuple[str, str]:
     """URL e sha256 do sdist de name==version no PyPI."""
-    with urllib.request.urlopen(f"https://pypi.org/pypi/{name}/{version}/json") as r:
-        data = json.load(r)
-    for f in data["urls"]:
+    for f in files(name, version):
         if f["packagetype"] == "sdist":
             return f["url"], f["digests"]["sha256"]
     raise SystemExit(f"{name} {version} não tem sdist no PyPI")
+
+
+def build_backend(url: str) -> str:
+    """O build-backend declarado no pyproject.toml do sdist ("" se não houver)."""
+    with urllib.request.urlopen(url) as r:
+        data = r.read()
+    with tarfile.open(fileobj=io.BytesIO(data)) as tar:
+        for member in tar.getmembers():
+            if member.name.count("/") == 1 and member.name.endswith("/pyproject.toml"):
+                text = tar.extractfile(member).read().decode()
+                m = re.search(r'^build-backend\s*=\s*"([^"]+)"', text, re.M)
+                return m.group(1) if m else ""
+    return ""
+
+
+def source(name: str, version: str) -> tuple[str, str]:
+    """URL e sha256 que o Homebrew consegue instalar: o sdist ou, se ele precisar
+    de Rust para compilar, o wheel Python puro."""
+    url, sha = sdist(name, version)
+    if build_backend(url).split(".")[0] in RUST_BACKENDS:
+        for f in files(name, version):
+            if f["filename"].endswith("-py3-none-any.whl"):
+                return f["url"], f["digests"]["sha256"]
+    return url, sha
 
 
 def resolve(requirement: str) -> dict[str, str]:
@@ -95,7 +133,7 @@ def main() -> None:
     for name in sorted(deps):
         if name in FROM_HOMEBREW:
             continue
-        r_url, r_sha = sdist(name, deps[name])
+        r_url, r_sha = source(name, deps[name])
         blocks.append(f'  resource "{name}" do\n    url "{r_url}"\n    sha256 "{r_sha}"\n  end\n')
 
     print(TEMPLATE.format(url=url, sha256=sha256, depends=depends,
