@@ -9,6 +9,7 @@ import random
 from typing import Callable, Sequence
 
 from nimbus.drive import DriveItem, media_url
+from nimbus.local import is_local, local_path
 from nimbus.player import MpvPlayer
 
 
@@ -79,7 +80,7 @@ class PlayQueue:
 
 
 class Controller:
-    """Toca a fila: pede um token fresco a cada faixa e avança no fim de cada uma."""
+    """Toca a fila: pede um token fresco a cada faixa do Drive e avança no fim de cada uma."""
 
     def __init__(self, player: MpvPlayer, queue: PlayQueue, token_provider: Callable[[], str]):
         self.player = player
@@ -93,7 +94,10 @@ class Controller:
         if item is None:
             self.finished = True
             return None
-        self.player.play(media_url(item.id), {"Authorization": f"Bearer {self._token()}"})
+        if is_local(item):
+            self.player.play(local_path(item))  # arquivo do disco: o mpv lê direto
+        else:
+            self.player.play(media_url(item.id), {"Authorization": f"Bearer {self._token()}"})
         return item
 
     def next(self) -> bool:
