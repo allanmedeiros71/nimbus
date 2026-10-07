@@ -3,12 +3,22 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nimbus"
-version = "0.2.0"
+name = "nimbus-player"
+dynamic = ["version"]
 description = "Terminal player that streams the music in your Google Drive folders"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
+authors = [{ name = "Allan Medeiros" }]
+keywords = ["music", "player", "tui", "google-drive", "mpv"]
+classifiers = [
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio :: Players",
+]
 dependencies = [
     "google-api-python-client>=2.100",
     "google-auth>=2.20",
@@ -19,11 +29,18 @@ dependencies = [
     "mutagen>=1.45",
 ]
 
+[project.urls]
+Homepage = "https://github.com/allanmedeiros71/nimbus"
+Issues = "https://github.com/allanmedeiros71/nimbus/issues"
+
 [project.optional-dependencies]
 dev = ["pytest>=7"]
 
 [project.scripts]
 nimbus = "nimbus.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "nimbus.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
