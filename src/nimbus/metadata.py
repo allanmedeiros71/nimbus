@@ -257,21 +257,26 @@ def _is_image(item: DriveItem) -> bool:
 
 
 def _cover_rank(name: str) -> int:
+    """0 e 1: nome de capa (cover, folder, AlbumArt_…_Large); 2: qualquer outra; 3: verso, CD, miniatura."""
     stem = name.rsplit(".", 1)[0].lower().strip()
     words = set(re.split(r"[^a-z0-9]+", stem))
+    if words & set(NOT_FRONT_NAMES) or "small" in stem or "thumb" in stem:
+        return 3  # AlbumArtSmall.jpg é a miniatura do Windows Media Player
     if stem in COVER_NAMES:
         return 0
     if any(n in stem for n in COVER_NAMES):
         return 1
-    if words & set(NOT_FRONT_NAMES):
-        return 3
     return 2
 
 
+def _cover_order(item: DriveItem) -> tuple:
+    return (_cover_rank(item.name), -(item.size or 0), item.name.lower())  # a maior primeiro
+
+
 def folder_cover_candidates(siblings: Sequence[DriveItem]) -> list[DriveItem]:
-    """Imagens da pasta, com cover/folder/capa… primeiro e verso/encarte por último."""
+    """Imagens da pasta, com cover/folder/capa… primeiro e verso/encarte/miniatura por último."""
     images = [i for i in siblings if _is_image(i)]
-    return sorted(images, key=lambda i: (_cover_rank(i.name), i.name.lower()))
+    return sorted(images, key=_cover_order)
 
 
 def local_cover_candidates(track_path: str) -> list[DriveItem]:
@@ -296,7 +301,7 @@ def local_cover_candidates(track_path: str) -> list[DriveItem]:
                 continue
         elif not child.is_folder and _is_image(child):
             found.append((0, child))
-    found.sort(key=lambda t: (_cover_rank(t[1].name), t[0], t[1].name.lower()))
+    found.sort(key=lambda t: (_cover_rank(t[1].name), t[0], -(t[1].size or 0), t[1].name.lower()))
     return [i for _, i in found]
 
 
@@ -719,13 +724,14 @@ class MetadataResolver:
             elif cover or not entry.get("cover_key"):  # capa sumiu do cache: refaz
                 out = Resolved(info=self.known(item), cover=cover, cover_source=entry.get("cover_source", ""),
                                note=entry.get("note", ""))
-                if cover is None and is_local_id(item.id):
-                    # A imagem pode ter sido posta na pasta depois; olhar o disco é barato.
-                    key = self._local_cover(item, siblings, self._basic(item, tags, folder_name)[1], out, [])
-                    if key:
-                        entry.update(cover_key=key, cover_source=out.cover_source, note="")
+                if is_local_id(item.id) and out.cover_source in ("", "arquivo", "pasta"):
+                    # Olhar o disco é barato: pega imagem posta ou trocada na pasta depois.
+                    fresh = Resolved(info=out.info)
+                    key = self._local_cover(item, siblings, self._basic(item, tags, folder_name)[1], fresh, [])
+                    if key and key != entry.get("cover_key"):
+                        entry.update(cover_key=key, cover_source=fresh.cover_source, note="")
                         self.store.put(item.id, entry)
-                        out.note = ""
+                        out.cover, out.cover_source, out.note = fresh.cover, fresh.cover_source, ""
                 return out
 
         errors: list = []
@@ -797,32 +803,40 @@ class MetadataResolver:
 
     def _local_cover(self, item: DriveItem, siblings: Sequence[DriveItem], junk_tags: bool,
                      out: Resolved, errors: list) -> str:
-        """Capa embutida (se as tags não são propaganda) ou, sem ela, imagem da pasta.
+        """Capa embutida (se as tags não são propaganda) ou imagem da pasta.
 
-        Só vale imagem que abre: capa embutida corrompida ou imagem cortada
-        passam a vez para a próxima.
+        No Drive a capa embutida vem primeiro. No disco, uma imagem com nome de
+        capa (Folder.jpg, cover.jpg…) ganha da embutida: quem montou a pasta
+        escolheu aquela imagem para o álbum. Só vale imagem que abre: capa
+        corrompida ou cortada passa a vez para a próxima.
         """
         local = is_local_id(item.id)
+        if local:
+            candidates, limit, max_bytes = local_cover_candidates(local_path(item.id)), 6, MAX_LOCAL_IMAGE
+        else:
+            candidates, limit, max_bytes = folder_cover_candidates(siblings), 2, MAX_DRIVE_IMAGE
+        candidates = candidates[:limit]
+
+        def from_folder(images: Sequence[DriveItem]) -> str:
+            for img in images:
+                key = f"file:{img.id}" + _file_stamp(local_path(img.id)) if local else f"drive:{img.id}"
+                cover = self._cached(key, lambda img=img: self._fetcher(img.id)(0, max_bytes - 1), errors)
+                if cover and image_decodes(cover):
+                    out.cover, out.cover_source = cover, "pasta"
+                    return key
+            return ""
+
+        named = [i for i in candidates if _cover_rank(i.name) <= 1] if local else []
+        key = from_folder(named)
+        if key:
+            return key
         key = f"embedded:{item.id}" + (_file_stamp(local_path(item.id)) if local else "")
         # Quem grava propaganda nas tags costuma pôr a própria arte como capa.
         cover = None if junk_tags else self._cached(key, lambda: embedded_cover(self._fetcher(item.id)), errors)
         if cover and image_decodes(cover):
             out.cover, out.cover_source = cover, "arquivo"
             return key
-        if local:
-            candidates, limit, max_bytes = local_cover_candidates(local_path(item.id)), 6, MAX_LOCAL_IMAGE
-        else:
-            candidates, limit, max_bytes = folder_cover_candidates(siblings), 2, MAX_DRIVE_IMAGE
-        for img in candidates[:limit]:
-            if local:
-                key = f"file:{img.id}" + _file_stamp(local_path(img.id))
-            else:
-                key = f"drive:{img.id}"
-            cover = self._cached(key, lambda img=img: self._fetcher(img.id)(0, max_bytes - 1), errors)
-            if cover and image_decodes(cover):
-                out.cover, out.cover_source = cover, "pasta"
-                return key
-        return ""
+        return from_folder([i for i in candidates if i not in named])
 
     def _cached(self, key: str, compute: Callable[[], bytes | None], errors: list | None = None) -> bytes | None:
         if self.covers.has(key):

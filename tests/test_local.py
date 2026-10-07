@@ -149,7 +149,8 @@ def test_local_metadata_and_embedded_cover(music, tmp_path):
     resolver = MetadataResolver(lambda: pytest.fail("arquivo local não usa token"), online=None,
                                 covers=CoverCache(tmp_path / "covers"), store=TrackStore(tmp_path / "t.json"))
     resolved = resolver.resolve(track, {"title": "Faixa Dois", "artist": "Banda Local"}, items, folder.name)
-    assert resolved.cover == tiny_png() and resolved.cover_source == "arquivo"
+    # capa.jpg ganha da capa embutida
+    assert resolved.cover == FOLDER_JPG and resolved.cover_source == "pasta"
 
     sem_capa = items[2]
     resolved = resolver.resolve(sem_capa, None, items, folder.name)
@@ -289,3 +290,40 @@ def test_tui_previews_local_folders_but_not_drive(music, monkeypatch, tmp_path):
                 assert "sharedWithMe" not in drive.calls
 
     asyncio.run(scenario())
+
+
+def _mp3_with_embedded(path, image):
+    tags = ID3()
+    tags.add(APIC(encoding=3, mime="image/png", type=3, desc="", data=image))
+    buf = io.BytesIO()
+    tags.save(buf)
+    path.write_bytes(buf.getvalue() + make_wav(1))
+
+
+def test_folder_jpg_beats_embedded_and_thumbnails(tmp_path):
+    """Pasta como a do issue #11: Folder.jpg, miniaturas do Windows Media Player e capa embutida."""
+    album = tmp_path / "14 Bis - O Talento"
+    album.mkdir()
+    _mp3_with_embedded(album / "02 - Cacador de Mim.mp3", tiny_png())
+    large = tiny_png((10, 10, 10), "JPEG")
+    (album / "AlbumArt_{B5020207-4}_Large.jpg").write_bytes(large + b"\0" * 100)
+    (album / "AlbumArt_{B5020207-4}_Small.jpg").write_bytes(tiny_png((20, 20, 20), "JPEG"))
+    (album / "AlbumArtSmall.jpg").write_bytes(tiny_png((30, 30, 30), "JPEG"))
+    resolver = _resolver(tmp_path)
+    items = Library(None).list_children(local.local_item(album).id)
+    track = next(i for i in items if i.is_audio)
+    assert resolver.resolve(track, None, items).cover == large + b"\0" * 100  # a grande, não a miniatura
+
+    (album / "Folder.jpg").write_bytes(FOLDER_JPG)
+    out = resolver.resolve(track, None, items)  # já salva: confere a pasta de novo
+    assert out.cover == FOLDER_JPG and out.cover_source == "pasta"
+
+
+def test_embedded_cover_beats_image_without_cover_name(tmp_path):
+    album = tmp_path / "Album"
+    album.mkdir()
+    _mp3_with_embedded(album / "01 - Banda - Um.mp3", tiny_png())
+    (album / "foto da banda.jpg").write_bytes(FOLDER_JPG)
+    items = Library(None).list_children(local.local_item(album).id)
+    out = _resolver(tmp_path).resolve(items[0], None, items)
+    assert out.cover == tiny_png() and out.cover_source == "arquivo"
