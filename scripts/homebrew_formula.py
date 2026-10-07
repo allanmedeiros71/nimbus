@@ -22,6 +22,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.request
 from pathlib import Path
 
@@ -104,15 +105,23 @@ def source(name: str, version: str) -> tuple[str, str]:
     return url, sha
 
 
-def resolve(requirement: str) -> dict[str, str]:
-    """Nome normalizado -> versão de tudo que o pip instalaria."""
+def resolve(requirement: str, attempts: int = 30, wait: float = 10) -> dict[str, str]:
+    """Nome normalizado -> versão de tudo que o pip instalaria.
+
+    Logo depois do upload, o índice do PyPI pode responder sem a versão nova
+    em alguns pontos da CDN (foi o que derrubou o job da v0.3.1), então tenta
+    de novo por alguns minutos, sem o cache do pip.
+    """
     with tempfile.TemporaryDirectory() as tmp:
         report = Path(tmp) / "report.json"
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--quiet", "--dry-run",
-             "--ignore-installed", "--report", str(report), requirement],
-            check=True,
-        )
+        cmd = [sys.executable, "-m", "pip", "install", "--quiet", "--dry-run", "--no-cache-dir",
+               "--ignore-installed", "--report", str(report), requirement]
+        for attempt in range(1, attempts + 1):
+            if subprocess.run(cmd).returncode == 0:
+                break
+            if attempt == attempts:
+                raise SystemExit(f"pip não encontrou {requirement} depois de {attempts} tentativas")
+            time.sleep(wait)
         data = json.loads(report.read_text())
     return {normalize(i["metadata"]["name"]): i["metadata"]["version"] for i in data["install"]}
 
