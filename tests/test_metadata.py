@@ -18,7 +18,16 @@ from nimbus.metadata import (
     parse_recording_search,
 )
 
-PNG = b"\x89PNG\r\n\x1a\n" + b"x" * 300_000  # grande o bastante para exigir mais de uma leitura
+def png(color=(200, 40, 40)):
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (8, 8), color).save(buf, "PNG")
+    return buf.getvalue()
+
+
+PNG = png() + b"x" * 300_000  # grande o bastante para exigir mais de uma leitura
+FOLDER_IMG = png((40, 200, 40))
 
 
 def fetcher_for(data, calls=None):
@@ -158,13 +167,13 @@ def test_resolver_order_and_online_fill(tmp_path):
 
 def test_resolver_uses_folder_image_before_internet(tmp_path):
     item = DriveItem("f1", "faixa.wav", "audio/wav")
-    files = {"f1": b"RIFF" + b"\0" * 100, "img": b"IMAGEM"}
+    files = {"f1": b"RIFF" + b"\0" * 100, "img": FOLDER_IMG}
     http = FakeHttp({})
     resolver = MetadataResolver(lambda: "t", online=OnlineLookup(http=http, cache=tmp_path),
                                 covers=CoverCache(tmp_path / "c"), fetcher=lambda fid: fetcher_for(files[fid]))
     tags = {"title": "T", "artist": "A", "album": "Al", "date": "2001", "genre": "rock"}
     out = resolver.resolve(item, tags, siblings=[DriveItem("img", "cover.jpg", "image/jpeg")])
-    assert out.cover == b"IMAGEM" and out.cover_source == "pasta"
+    assert out.cover == FOLDER_IMG and out.cover_source == "pasta"
     assert http.urls == []  # tags completas e capa achada: nada de internet
 
 
@@ -319,7 +328,7 @@ def test_is_compilation():
 def test_compilation_prefers_per_track_cover(tmp_path):
     from nimbus.metadata import TrackStore
 
-    files = {"a3": mp3_with_cover(), "img": b"CAPA DA PASTA"}
+    files = {"a3": mp3_with_cover(), "img": FOLDER_IMG}
     http = FakeHttp({
         "/recording?": {"recordings": [{"score": 100, "title": "Tempo Perdido", "first-release-date": "1986",
                                          "releases": [{"id": "rel", "title": "Dois", "status": "Official",
@@ -338,12 +347,12 @@ def test_compilation_prefers_per_track_cover(tmp_path):
 def test_compilation_falls_back_to_folder_image(tmp_path):
     from nimbus.metadata import TrackStore
 
-    files = {"a1": b"RIFF" + b"\0" * 100, "img": b"CAPA DA PASTA"}
+    files = {"a1": b"RIFF" + b"\0" * 100, "img": FOLDER_IMG}
     resolver = MetadataResolver(lambda: "t", online=OnlineLookup(http=FakeHttp({}), cache=tmp_path),
                                 covers=CoverCache(tmp_path / "c"), fetcher=lambda fid: fetcher_for(files[fid]),
                                 store=TrackStore(tmp_path / "t.json"))
     out = resolver.resolve(COMPILATION[0], None, siblings=COMPILATION)
-    assert out.cover == b"CAPA DA PASTA" and out.cover_source == "pasta"
+    assert out.cover == FOLDER_IMG and out.cover_source == "pasta"
 
 
 def test_recording_search_falls_back_to_looser_queries(tmp_path):
@@ -374,7 +383,7 @@ def test_online_note_explains_missing_cover(tmp_path):
         def get(self, url, headers=None):
             raise OSError("certificate verify failed")
 
-    files = {"a1": b"RIFF" + b"\0" * 100, "img": b"CAPA DA PASTA"}
+    files = {"a1": b"RIFF" + b"\0" * 100, "img": FOLDER_IMG}
     resolver = MetadataResolver(lambda: "t", online=OnlineLookup(http=Down({}), cache=tmp_path),
                                 covers=CoverCache(tmp_path / "c"), fetcher=lambda fid: fetcher_for(files[fid]),
                                 store=TrackStore(tmp_path / "t.json"))
@@ -401,7 +410,7 @@ def test_store_cover_when_cover_art_archive_unreachable(tmp_path):
             {"artistName": "Legião Urbana", "artworkUrl100": "https://img/certa/100x100bb.jpg"}]},
         "img/certa/300x300bb.jpg": b"CAPA ITUNES",
     })
-    files = {"a3": b"RIFF" + b"\0" * 100, "img": b"CAPA DA PASTA"}
+    files = {"a3": b"RIFF" + b"\0" * 100, "img": FOLDER_IMG}
     store = TrackStore(tmp_path / "t.json")
     resolver = MetadataResolver(lambda: "t", online=OnlineLookup(http=http, cache=tmp_path),
                                 covers=CoverCache(tmp_path / "c"), fetcher=lambda fid: fetcher_for(files[fid]),

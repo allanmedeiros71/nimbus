@@ -20,12 +20,15 @@ from test_player import make_wav
 needs_mpv = pytest.mark.skipif(shutil.which("mpv") is None, reason="mpv não instalado")
 
 
-def tiny_png():
+def tiny_png(color=(40, 40, 200), fmt="PNG"):
     from PIL import Image
 
     buf = io.BytesIO()
-    Image.new("RGB", (8, 8), (40, 40, 200)).save(buf, "PNG")
+    Image.new("RGB", (8, 8), color).save(buf, fmt)
     return buf.getvalue()
+
+
+FOLDER_JPG = tiny_png((200, 40, 40), "JPEG")
 
 
 @pytest.fixture
@@ -43,7 +46,7 @@ def music(tmp_path):
     (root / "2 - Banda - Dois.mp3").write_bytes(buf.getvalue() + make_wav(1))
     (root / "10 - Banda - Dez.wav").write_bytes(make_wav(1))
     (root / "lista.m3u").write_text("")
-    (root / "capa.jpg").write_bytes(b"jpg")
+    (root / "capa.jpg").write_bytes(FOLDER_JPG)
     (root / "Disco 2" / "01 - Outra.flac").write_bytes(b"x")
     (root / "Disco 2" / "volta").symlink_to(root)  # laço: não pode travar o recursive
     return root
@@ -150,7 +153,52 @@ def test_local_metadata_and_embedded_cover(music, tmp_path):
 
     sem_capa = items[2]
     resolved = resolver.resolve(sem_capa, None, items, folder.name)
-    assert resolved.cover == b"jpg" and resolved.cover_source == "pasta"
+    assert resolved.cover == FOLDER_JPG and resolved.cover_source == "pasta"
+
+
+def _resolver(tmp_path):
+    return MetadataResolver(lambda: pytest.fail("arquivo local não usa token"), online=None,
+                            covers=CoverCache(tmp_path / "covers"), store=TrackStore(tmp_path / "t.json"))
+
+
+def test_local_cover_in_art_subfolder(tmp_path):
+    album = tmp_path / "Album"
+    (album / "Covers").mkdir(parents=True)
+    (album / "01 - Banda - Um.wav").write_bytes(make_wav(1))
+    (album / "Covers" / "Back.jpg").write_bytes(tiny_png((0, 0, 0), "JPEG"))
+    (album / "Covers" / "Front.jpg").write_bytes(FOLDER_JPG)
+    items = Library(None).list_children(local.local_item(album).id)
+    out = _resolver(tmp_path).resolve(items[1], None, items, "Album")
+    assert out.cover == FOLDER_JPG and out.cover_source == "pasta"
+
+
+def test_local_cover_skips_images_that_do_not_open(tmp_path):
+    album = tmp_path / "Album"
+    album.mkdir()
+    tags = ID3()
+    tags.add(APIC(encoding=3, mime="image/jpeg", type=3, desc="", data=b"\xff\xd8 corrompida"))
+    buf = io.BytesIO()
+    tags.save(buf)
+    (album / "01 - Banda - Um.mp3").write_bytes(buf.getvalue() + make_wav(1))
+    (album / "cover.jpg").write_bytes(FOLDER_JPG[:40])  # cortada
+    (album / "folder.jpg").write_bytes(FOLDER_JPG)
+    items = Library(None).list_children(local.local_item(album).id)
+    out = _resolver(tmp_path).resolve(items[0], None, items, "Album")
+    assert out.cover == FOLDER_JPG and out.cover_source == "pasta"
+
+
+def test_local_cover_added_after_first_play(tmp_path):
+    album = tmp_path / "Album"
+    album.mkdir()
+    (album / "01 - Banda - Um.wav").write_bytes(make_wav(1))
+    resolver = _resolver(tmp_path)
+    items = Library(None).list_children(local.local_item(album).id)
+    assert resolver.resolve(items[0], None, items, "Album").cover is None
+
+    (album / "folder.jpg").write_bytes(FOLDER_JPG)
+    out = resolver.resolve(items[0], None, items, "Album")  # listagem antiga, sem a imagem
+    assert out.cover == FOLDER_JPG and out.cover_source == "pasta"
+    assert resolver.store.get(items[0].id)["cover_source"] == "pasta"
 
 
 @needs_mpv
