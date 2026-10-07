@@ -9,22 +9,35 @@ Também toca as músicas do próprio computador: pasta pessoal, HD externo e pen
 - Python 3.9 ou mais novo
 - [mpv](https://mpv.io): `brew install mpv` no macOS, `sudo apt install mpv` no Debian/Ubuntu
 
+Com a instalação pelo Homebrew, os dois já vêm junto.
+
 ## Instalação
 
-O jeito recomendado é o [pipx](https://pipx.pypa.io): ele cria um ambiente isolado para o nimbus e deixa o comando `nimbus` disponível em qualquer pasta e em qualquer terminal, o que também é necessário para o autocomplete.
+### Homebrew (macOS e Linux)
+
+```sh
+brew install allanmedeiros71/tap/nimbus
+```
+
+O Homebrew já instala o mpv e o Python junto. Para atualizar: `brew upgrade nimbus`.
+
+### pipx
+
+O [pipx](https://pipx.pypa.io) cria um ambiente isolado para o nimbus e deixa o comando `nimbus` disponível em qualquer pasta e em qualquer terminal, o que também é necessário para o autocomplete. Nesse caso o mpv é instalado à parte (veja Requisitos). No PyPI o pacote se chama `nimbus-player`; o comando continua sendo `nimbus`.
 
 ```sh
 brew install pipx          # macOS
 sudo apt install pipx      # Debian/Ubuntu
 pipx ensurepath            # coloca ~/.local/bin no PATH
 
-git clone git@github.com:allanmedeiros71/nimbus.git
-pipx install -e ./nimbus
+pipx install nimbus-player
 ```
 
-Depois do `pipx ensurepath`, **abra um terminal novo** para o PATH valer. Com `-e`, um `git pull` dentro da pasta já atualiza o comando; só rode `pipx install -e --force ./nimbus` de novo se mudarem as dependências.
+Depois do `pipx ensurepath`, **abra um terminal novo** para o PATH valer. Para atualizar: `pipx upgrade nimbus-player`.
 
-Para instalar direto do GitHub, sem clonar: `pipx install git+ssh://git@github.com/allanmedeiros71/nimbus.git` (atualize com `pipx upgrade nimbus`).
+Se você instalou uma versão antiga a partir do GitHub, troque pela do PyPI: `pipx uninstall nimbus && pipx install nimbus-player`.
+
+Para usar o código do repositório (versão em desenvolvimento): `git clone git@github.com:allanmedeiros71/nimbus.git` e `pipx install -e ./nimbus`. Com `-e`, um `git pull` dentro da pasta já atualiza o comando; só rode `pipx install -e --force ./nimbus` de novo se mudarem as dependências.
 
 ### Alternativa para desenvolvimento: ambiente virtual
 
@@ -160,7 +173,7 @@ bash: adicione ao `~/.bashrc` (no macOS, `~/.bash_profile`)
 eval "$(nimbus completion bash)"
 ```
 
-Abra um terminal novo e teste com `nimbus ls Mú<Tab>`. O `eval` precisa do comando `nimbus` no PATH, por isso use a instalação com pipx. As listagens ficam em cache por 5 minutos em `~/.cache/nimbus`, então uma pasta recém-criada pode levar esse tempo para aparecer no `Tab`.
+Abra um terminal novo e teste com `nimbus ls Mú<Tab>`. O `eval` precisa do comando `nimbus` no PATH, por isso use a instalação com Homebrew ou pipx. As listagens ficam em cache por 5 minutos em `~/.cache/nimbus`, então uma pasta recém-criada pode levar esse tempo para aparecer no `Tab`.
 
 Teclas durante o `nimbus play`: `espaço` pausa, `n` próxima, `p` anterior, `←`/`→` voltam ou avançam 10s, `+`/`-` volume, `q` sai.
 
@@ -185,3 +198,14 @@ pytest
 ```
 
 Os testes de reprodução e da interface usam um mpv real e um servidor HTTP local que imita o Drive (exige o token e responde a requisições Range).
+
+## Publicar uma versão
+
+1. Suba o número em `src/nimbus/__init__.py` (`__version__`) e faça o merge no `main`.
+2. Crie e envie a tag: `git tag v0.3.0 && git push origin v0.3.0`.
+
+O workflow `release` roda os testes, publica `nimbus-player` no PyPI, cria o GitHub Release com os pacotes e atualiza `Formula/nimbus.rb` no repositório [homebrew-tap](https://github.com/allanmedeiros71/homebrew-tap). A fórmula é gerada por `scripts/homebrew_formula.py`.
+
+Configuração feita uma vez só:
+- PyPI: em pypi.org, *Your projects → Publishing → Add a new pending publisher* com projeto `nimbus-player`, dono `allanmedeiros71`, repositório `nimbus`, workflow `release.yml` e ambiente `pypi`.
+- Homebrew: crie o repositório público `allanmedeiros71/homebrew-tap` e um token fine-grained com permissão *Contents: read and write* só nele; salve como segredo `HOMEBREW_TAP_TOKEN` neste repositório. Sem o segredo, o workflow publica no PyPI e só avisa que pulou o Homebrew.
