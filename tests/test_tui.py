@@ -199,7 +199,7 @@ def test_vim_keys_in_tree(setup):
             await pilot.press("h")
             assert tree.cursor_node.data.id == "root"
             await pilot.press("G")
-            assert tree.cursor_node.data.name == "Compartilhados comigo"
+            assert tree.cursor_node.data.name == "Este computador"
 
     asyncio.run(scenario())
 

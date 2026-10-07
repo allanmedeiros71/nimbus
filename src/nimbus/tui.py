@@ -2,7 +2,8 @@
 
 Em cima, o painel Playback: capa, metadados, estado (repeat, shuffle, volume),
 barra de progresso e atalhos. Embaixo, Directories: a árvore de pastas do
-Drive à esquerda e o conteúdo da pasta selecionada à direita; Enter numa
+Drive e de "Este computador" (pasta pessoal, HD externo, pendrive) à esquerda
+e o conteúdo da pasta selecionada à direita; Enter numa
 música começa a tocar a pasta a partir dela.
 
 O mpv manda eventos por uma thread própria; a interface só lê o estado num
@@ -29,6 +30,7 @@ from textual.widgets import DataTable, Static, Tree
 from textual.widgets.tree import TreeNode
 
 from nimbus.drive import FOLDER_MIME, DriveItem, shared_with_me
+from nimbus.local import LOCAL_ROOT, is_local, local_path, local_root
 from nimbus.metadata import MetadataResolver, TrackInfo
 from nimbus.playback import Controller, PlayQueue
 
@@ -265,7 +267,7 @@ class NimbusApp(App):
         # Pastas remotas (Drive, e no futuro OneDrive) só são listadas no painel
         # da direita com Enter ou →, para não gastar banda nem chamadas de API
         # a cada passo na árvore. Pastas locais aparecem enquanto se navega.
-        self.is_remote = is_remote or (lambda item: True)
+        self.is_remote = is_remote or (lambda item: not is_local(item))
         self._opened: set[str] = set()  # pastas remotas que o usuário pediu para abrir
         self.drive = drive
         self.player = player
@@ -333,13 +335,18 @@ class NimbusApp(App):
         roots = []
         if self.start_folder is not None and self.start_folder.id not in ("root",):
             roots.append(self.start_folder)
-        roots += [DriveItem(id="root", name="Meu Drive", mime_type=FOLDER_MIME), shared_with_me()]
+        if getattr(self.drive, "has_drive", True):
+            roots += [DriveItem(id="root", name="Meu Drive", mime_type=FOLDER_MIME), shared_with_me()]
+        roots.append(local_root())
         nodes = [tree.root.add(self._folder_label(item), data=item, allow_expand=True) for item in roots]
         tree.root.expand()
         nodes[0].expand()
         tree.move_cursor(nodes[0])
         tree.focus()
         self.open_folder(nodes[0])  # o cursor já está na linha 0: não há evento de destaque
+        if not getattr(self.drive, "has_drive", True):
+            self.notify("Sem login no Google: só as músicas deste computador. Para ver o Drive, rode "
+                        "'nimbus login'.", timeout=8)
 
         try:
             self.player.observe("pause", "volume", "mute", "time-pos", "duration")
@@ -355,9 +362,9 @@ class NimbusApp(App):
 
     @staticmethod
     def _folder_label(item: DriveItem) -> Text:
-        return Text("📁 " + item.name)
+        return Text(("💻 " if item.id == LOCAL_ROOT else "📁 ") + item.name)
 
-    # Drive
+    # Drive e disco
 
     def list_folder(self, folder_id: str) -> list[DriveItem]:
         """Lista uma pasta (com cache). Chamar só fora da thread da interface."""
@@ -667,11 +674,12 @@ class NimbusApp(App):
     def _resolve_metadata(self) -> None:
         path = self.player.get_property("path") or ""
         m = _ID_IN_URL.search(path)
-        if not m:
-            return
         with self._ctl_lock:
             tracks = list(self.ctl.queue.tracks) if self.ctl else []
-        item = next((t for t in tracks if t.id == m.group(1)), None)
+        if m:
+            item = next((t for t in tracks if t.id == m.group(1)), None)
+        else:  # arquivo local: o mpv devolve o próprio caminho
+            item = next((t for t in tracks if is_local(t) and local_path(t) == path), None)
         if item is None:
             return
         gen = self._gen

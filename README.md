@@ -2,6 +2,8 @@
 
 Player de terminal (Linux e macOS) que toca em streaming as músicas das suas pastas do Google Drive. O acesso é somente leitura e nada é baixado antes: o mpv lê cada faixa por partes, uns dois minutos à frente do que está tocando.
 
+Também toca as músicas do próprio computador: pasta pessoal, HD externo e pendrive. Essa parte funciona mesmo sem login no Google.
+
 ## Requisitos
 
 - Python 3.9 ou mais novo
@@ -64,10 +66,11 @@ O navegador abre pedindo permissão de leitura do Drive (`drive.readonly`). O to
 ```sh
 nimbus                      # abre a interface
 nimbus tui "Música/Rock"    # abre já com essa pasta selecionada
+nimbus tui ~/Música         # ou com uma pasta do computador
 nimbus tui --offline        # sem consultar MusicBrainz/Cover Art Archive
 ```
 
-Em cima fica o painel **Playback**: capa do álbum, título • artista, álbum • gênero • ano, o ícone de tocando/pausado, repeat, shuffle, volume, a posição na fila e uma barra de progresso. Embaixo, **Directories**: a árvore de pastas (Meu Drive e Compartilhados comigo) à esquerda e o conteúdo da pasta selecionada à direita. `Enter` numa música toca a pasta inteira a partir dela. Para economizar banda e chamadas à API, uma pasta do Drive só é listada à direita quando você aperta `Enter` ou `→`/`l` nela; pastas já abertas aparecem na hora.
+Em cima fica o painel **Playback**: capa do álbum, título • artista, álbum • gênero • ano, o ícone de tocando/pausado, repeat, shuffle, volume, a posição na fila e uma barra de progresso. Embaixo, **Directories**: a árvore de pastas (Meu Drive, Compartilhados comigo e Este computador) à esquerda e o conteúdo da pasta selecionada à direita. `Enter` numa música toca a pasta inteira a partir dela. Para economizar banda e chamadas à API, uma pasta do Drive só é listada à direita quando você aperta `Enter` ou `→`/`l` nela; pastas já abertas e as do computador aparecem na hora, durante a navegação.
 
 | Tecla | Ação |
 |---|---|
@@ -85,6 +88,17 @@ Em cima fica o painel **Playback**: capa do álbum, título • artista, álbum 
 | `Enter` | toca a música ou entra na subpasta |
 | `?` | ajuda |
 | `q` | sair |
+
+### Músicas do computador, HD externo e pendrive
+
+A raiz **Este computador** da árvore mostra a pasta pessoal, os discos externos montados e o disco do sistema (`/`). Os discos externos são procurados onde cada sistema os monta:
+
+- macOS: `/Volumes` (o disco do sistema, que lá aparece como atalho para `/`, fica de fora);
+- Linux: `/media/<usuário>/…` (Ubuntu, Debian), `/run/media/<usuário>/…` (Fedora, Arch), `/media/…` e os pontos de montagem em `/mnt`.
+
+Um pendrive conectado com a interface já aberta só aparece ao reabrir o nimbus. Pastas e arquivos ocultos (começando com `.`) não aparecem, e listas de reprodução (`.m3u`, `.pls`) não entram na fila. O mpv lê os arquivos direto do disco, e a capa vem do próprio arquivo ou de uma imagem da pasta, como no Drive.
+
+Sem login no Google, `nimbus` abre só com **Este computador**.
 
 ### Capa e metadados
 
@@ -115,6 +129,11 @@ nimbus ls https://drive.google.com/drive/folders/<id>   # URL ou ID de pasta, in
 nimbus play "Música/Rock"          # toca a pasta em ordem
 nimbus play "Música" -r -s         # inclui subpastas, ordem aleatória
 
+nimbus ls ~/Música                 # pasta do computador
+nimbus play /Volumes/PENDRIVE -r   # pendrive no macOS
+nimbus play /media/$USER/HD/Discos -s   # HD externo no Linux
+nimbus ls "Este computador"        # pasta pessoal e discos montados
+
 nimbus ls "Compartilhados comigo"                 # o que outras pessoas compartilharam com você
 nimbus ls "Compartilhados comigo/Discos do Amigo"
 nimbus play "Compartilhados comigo/Discos do Amigo" -r
@@ -122,9 +141,11 @@ nimbus play "Compartilhados comigo/Discos do Amigo" -r
 
 "Compartilhados comigo" aparece como uma pasta na raiz do `nimbus ls`. Também aceita `Shared with me`, `@compartilhados` ou `@shared`, útil se você tiver uma pasta própria com esse nome. Pastas compartilhadas também podem ser abertas pela URL ou pelo ID, como qualquer outra.
 
+Um caminho é do computador quando começa com `/`, `~`, `./` ou `../` (também aceita `file://…`). Qualquer outro é procurado no Drive, então para uma pasta relativa do computador use `./Discos`, não só `Discos`.
+
 ### Autocomplete de pastas (zsh e bash)
 
-Com o autocomplete ativo, `Tab` completa os nomes das pastas do Drive em `nimbus ls` e `nimbus play`, uma parte do caminho por vez, inclusive dentro de "Compartilhados comigo". Maiúsculas e acentos não precisam bater.
+Com o autocomplete ativo, `Tab` completa os nomes das pastas do Drive em `nimbus ls` e `nimbus play`, uma parte do caminho por vez, inclusive dentro de "Compartilhados comigo". Caminhos do computador (`~/Mú<Tab>`, `/Volumes/<Tab>`) também completam. Maiúsculas e acentos não precisam bater.
 
 zsh (padrão no macOS): adicione ao fim do `~/.zshrc`
 
@@ -147,7 +168,8 @@ Teclas durante o `nimbus play`: `espaço` pausa, `n` próxima, `p` anterior, `�
 
 - `drive.py` lista pastas e arquivos pela Drive API v3 (com suporte a drives compartilhados, "Compartilhados comigo" e atalhos). Áudio é detectado pelo tipo MIME ou pela extensão.
 - `player.py` inicia o mpv em modo ocioso e o controla pelo socket JSON IPC. Cada faixa é a URL `files/<id>?alt=media` da API, com o cabeçalho `Authorization: Bearer …` enviado pelo socket, nunca na linha de comando.
-- `playback.py` cuida da fila e pede um token renovado antes de cada faixa.
+- `local.py` lista pastas do computador e encontra os discos montados; `library.py` junta Drive e computador e encaminha cada pedido para a origem certa. Itens locais têm ID `local:<caminho>`.
+- `playback.py` cuida da fila e pede um token renovado antes de cada faixa do Drive. Arquivos locais vão para o mpv pelo caminho, sem token.
 - `tui.py` é a interface visual (Textual). Os eventos do mpv chegam numa thread própria e a tela só lê o estado num timer, então rede e IPC não travam a interface.
 - `metadata.py` junta tags, nome do arquivo, capa embutida, imagem da pasta e MusicBrainz/Cover Art Archive.
 - `cli.py` tem os comandos de linha de comando e abre a interface quando não há comando.

@@ -5,7 +5,7 @@ A ordem de busca vai do que custa menos ao que depende da internet:
 1. Tags lidas pelo mpv (título, artista, álbum, gênero, ano).
 2. Nome do arquivo ("01 - Artista - Título.mp3") e da pasta, quando faltam tags.
 3. Capa embutida no arquivo (ID3 do MP3 e bloco PICTURE do FLAC), lendo do
-   Drive só o começo do arquivo, onde esses dados ficam.
+   Drive (ou do disco) só o começo do arquivo, onde esses dados ficam.
 4. Imagem na mesma pasta (cover.jpg, folder.png, capa.jpg…).
 5. MusicBrainz para completar álbum, ano e gênero, e Cover Art Archive para a
    capa. Só artista, título e álbum saem do computador.
@@ -31,6 +31,7 @@ from typing import Callable, Optional, Sequence
 
 from nimbus import __version__
 from nimbus.drive import DriveItem, media_url
+from nimbus.local import is_local_id, local_fetcher, local_path
 
 USER_AGENT = f"nimbus/{__version__} ( https://github.com/allanmedeiros71/nimbus )"
 MB_API = "https://musicbrainz.org/ws/2"
@@ -612,7 +613,11 @@ class MetadataResolver:
         self.online = online
         self.covers = covers or CoverCache()
         self.store = store if store is not None else TrackStore()
-        self._fetcher = fetcher or (lambda file_id: drive_fetcher(file_id, self._token))
+        drive = fetcher or (lambda file_id: drive_fetcher(file_id, self._token))
+        # Arquivos do disco são lidos direto, sem token.
+        self._fetcher = lambda file_id: (
+            local_fetcher(local_path(file_id)) if is_local_id(file_id) else drive(file_id)
+        )
 
     def basic(self, item: DriveItem, tags: dict | None, folder_name: str = "") -> TrackInfo:
         """O que dá para mostrar já: a correção salva, se a faixa já tocou, ou tags + nome do arquivo."""

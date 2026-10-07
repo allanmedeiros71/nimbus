@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Iterator
+from typing import Callable, Iterable, Iterator
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
 SHORTCUT_MIME = "application/vnd.google-apps.shortcut"
@@ -85,6 +85,32 @@ def shared_with_me() -> DriveItem:
     return DriveItem(id=SHARED_WITH_ME, name=SHARED_NAME, mime_type=FOLDER_MIME)
 
 
+def collect_audio(iter_children: Callable[[str], Iterable[DriveItem]], folder_id: str,
+                  recursive: bool = False, key: Callable[[str], str] = lambda i: i) -> list[DriveItem]:
+    """Áudio de uma pasta e, com recursive, das subpastas (profundidade primeiro, na ordem).
+
+    key identifica uma pasta já visitada; no disco local é o caminho real, para
+    que um link simbólico que aponta para cima não vire um laço infinito.
+    """
+    tracks: list[DriveItem] = []
+    seen = {key(folder_id)}
+    pending = [folder_id]
+    while pending:
+        current = pending.pop(0)
+        subfolders = []
+        for item in iter_children(current):
+            if item.is_folder:
+                k = key(item.id)
+                if k not in seen:
+                    seen.add(k)
+                    subfolders.append(item.id)
+            elif item.is_audio:
+                tracks.append(item)
+        if recursive:
+            pending[:0] = subfolders
+    return tracks
+
+
 class Drive:
     def __init__(self, service):
         self._service = service
@@ -129,22 +155,7 @@ class Drive:
 
     def list_audio(self, folder_id: str = "root", recursive: bool = False) -> list[DriveItem]:
         """Arquivos de áudio da pasta, em ordem natural de nome; subpastas depois, se recursive."""
-        tracks: list[DriveItem] = []
-        seen = {folder_id}
-        pending = [folder_id]
-        while pending:
-            current = pending.pop(0)
-            subfolders = []
-            for item in self.iter_children(current):
-                if item.is_folder:
-                    if item.id not in seen:
-                        seen.add(item.id)
-                        subfolders.append(item.id)
-                elif item.is_audio:
-                    tracks.append(item)
-            if recursive:
-                pending[:0] = subfolders  # profundidade primeiro, mantendo a ordem
-        return tracks
+        return collect_audio(self.iter_children, folder_id, recursive)
 
     def get(self, file_id: str) -> DriveItem:
         f = self._files().get(
