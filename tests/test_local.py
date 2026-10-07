@@ -20,12 +20,15 @@ from test_player import make_wav
 needs_mpv = pytest.mark.skipif(shutil.which("mpv") is None, reason="mpv não instalado")
 
 
-def tiny_png():
+def tiny_png(color=(40, 40, 200), fmt="PNG"):
     from PIL import Image
 
     buf = io.BytesIO()
-    Image.new("RGB", (8, 8), (40, 40, 200)).save(buf, "PNG")
+    Image.new("RGB", (8, 8), color).save(buf, fmt)
     return buf.getvalue()
+
+
+FOLDER_JPG = tiny_png((200, 40, 40), "JPEG")
 
 
 @pytest.fixture
@@ -43,7 +46,7 @@ def music(tmp_path):
     (root / "2 - Banda - Dois.mp3").write_bytes(buf.getvalue() + make_wav(1))
     (root / "10 - Banda - Dez.wav").write_bytes(make_wav(1))
     (root / "lista.m3u").write_text("")
-    (root / "capa.jpg").write_bytes(b"jpg")
+    (root / "capa.jpg").write_bytes(FOLDER_JPG)
     (root / "Disco 2" / "01 - Outra.flac").write_bytes(b"x")
     (root / "Disco 2" / "volta").symlink_to(root)  # laço: não pode travar o recursive
     return root
@@ -146,11 +149,57 @@ def test_local_metadata_and_embedded_cover(music, tmp_path):
     resolver = MetadataResolver(lambda: pytest.fail("arquivo local não usa token"), online=None,
                                 covers=CoverCache(tmp_path / "covers"), store=TrackStore(tmp_path / "t.json"))
     resolved = resolver.resolve(track, {"title": "Faixa Dois", "artist": "Banda Local"}, items, folder.name)
-    assert resolved.cover == tiny_png() and resolved.cover_source == "arquivo"
+    # capa.jpg ganha da capa embutida
+    assert resolved.cover == FOLDER_JPG and resolved.cover_source == "pasta"
 
     sem_capa = items[2]
     resolved = resolver.resolve(sem_capa, None, items, folder.name)
-    assert resolved.cover == b"jpg" and resolved.cover_source == "pasta"
+    assert resolved.cover == FOLDER_JPG and resolved.cover_source == "pasta"
+
+
+def _resolver(tmp_path):
+    return MetadataResolver(lambda: pytest.fail("arquivo local não usa token"), online=None,
+                            covers=CoverCache(tmp_path / "covers"), store=TrackStore(tmp_path / "t.json"))
+
+
+def test_local_cover_in_art_subfolder(tmp_path):
+    album = tmp_path / "Album"
+    (album / "Covers").mkdir(parents=True)
+    (album / "01 - Banda - Um.wav").write_bytes(make_wav(1))
+    (album / "Covers" / "Back.jpg").write_bytes(tiny_png((0, 0, 0), "JPEG"))
+    (album / "Covers" / "Front.jpg").write_bytes(FOLDER_JPG)
+    items = Library(None).list_children(local.local_item(album).id)
+    out = _resolver(tmp_path).resolve(items[1], None, items, "Album")
+    assert out.cover == FOLDER_JPG and out.cover_source == "pasta"
+
+
+def test_local_cover_skips_images_that_do_not_open(tmp_path):
+    album = tmp_path / "Album"
+    album.mkdir()
+    tags = ID3()
+    tags.add(APIC(encoding=3, mime="image/jpeg", type=3, desc="", data=b"\xff\xd8 corrompida"))
+    buf = io.BytesIO()
+    tags.save(buf)
+    (album / "01 - Banda - Um.mp3").write_bytes(buf.getvalue() + make_wav(1))
+    (album / "cover.jpg").write_bytes(FOLDER_JPG[:40])  # cortada
+    (album / "folder.jpg").write_bytes(FOLDER_JPG)
+    items = Library(None).list_children(local.local_item(album).id)
+    out = _resolver(tmp_path).resolve(items[0], None, items, "Album")
+    assert out.cover == FOLDER_JPG and out.cover_source == "pasta"
+
+
+def test_local_cover_added_after_first_play(tmp_path):
+    album = tmp_path / "Album"
+    album.mkdir()
+    (album / "01 - Banda - Um.wav").write_bytes(make_wav(1))
+    resolver = _resolver(tmp_path)
+    items = Library(None).list_children(local.local_item(album).id)
+    assert resolver.resolve(items[0], None, items, "Album").cover is None
+
+    (album / "folder.jpg").write_bytes(FOLDER_JPG)
+    out = resolver.resolve(items[0], None, items, "Album")  # listagem antiga, sem a imagem
+    assert out.cover == FOLDER_JPG and out.cover_source == "pasta"
+    assert resolver.store.get(items[0].id)["cover_source"] == "pasta"
 
 
 @needs_mpv
@@ -241,3 +290,40 @@ def test_tui_previews_local_folders_but_not_drive(music, monkeypatch, tmp_path):
                 assert "sharedWithMe" not in drive.calls
 
     asyncio.run(scenario())
+
+
+def _mp3_with_embedded(path, image):
+    tags = ID3()
+    tags.add(APIC(encoding=3, mime="image/png", type=3, desc="", data=image))
+    buf = io.BytesIO()
+    tags.save(buf)
+    path.write_bytes(buf.getvalue() + make_wav(1))
+
+
+def test_folder_jpg_beats_embedded_and_thumbnails(tmp_path):
+    """Pasta como a do issue #11: Folder.jpg, miniaturas do Windows Media Player e capa embutida."""
+    album = tmp_path / "14 Bis - O Talento"
+    album.mkdir()
+    _mp3_with_embedded(album / "02 - Cacador de Mim.mp3", tiny_png())
+    large = tiny_png((10, 10, 10), "JPEG")
+    (album / "AlbumArt_{B5020207-4}_Large.jpg").write_bytes(large + b"\0" * 100)
+    (album / "AlbumArt_{B5020207-4}_Small.jpg").write_bytes(tiny_png((20, 20, 20), "JPEG"))
+    (album / "AlbumArtSmall.jpg").write_bytes(tiny_png((30, 30, 30), "JPEG"))
+    resolver = _resolver(tmp_path)
+    items = Library(None).list_children(local.local_item(album).id)
+    track = next(i for i in items if i.is_audio)
+    assert resolver.resolve(track, None, items).cover == large + b"\0" * 100  # a grande, não a miniatura
+
+    (album / "Folder.jpg").write_bytes(FOLDER_JPG)
+    out = resolver.resolve(track, None, items)  # já salva: confere a pasta de novo
+    assert out.cover == FOLDER_JPG and out.cover_source == "pasta"
+
+
+def test_embedded_cover_beats_image_without_cover_name(tmp_path):
+    album = tmp_path / "Album"
+    album.mkdir()
+    _mp3_with_embedded(album / "01 - Banda - Um.mp3", tiny_png())
+    (album / "foto da banda.jpg").write_bytes(FOLDER_JPG)
+    items = Library(None).list_children(local.local_item(album).id)
+    out = _resolver(tmp_path).resolve(items[0], None, items)
+    assert out.cover == tiny_png() and out.cover_source == "arquivo"

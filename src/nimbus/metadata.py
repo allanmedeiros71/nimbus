@@ -6,7 +6,8 @@ A ordem de busca vai do que custa menos ao que depende da internet:
 2. Nome do arquivo ("01 - Artista - Título.mp3") e da pasta, quando faltam tags.
 3. Capa embutida no arquivo (ID3 do MP3 e bloco PICTURE do FLAC), lendo do
    Drive (ou do disco) só o começo do arquivo, onde esses dados ficam.
-4. Imagem na mesma pasta (cover.jpg, folder.png, capa.jpg…).
+4. Imagem na mesma pasta (cover.jpg, folder.png, capa.jpg…) e, no disco, também
+   em subpastas como Covers/ ou Artwork/.
 5. MusicBrainz para completar álbum, ano e gênero, e Cover Art Archive para a
    capa. Só artista, título e álbum saem do computador.
 
@@ -42,7 +43,13 @@ MAX_TAG_BYTES = 16 * 1024 * 1024
 HEAD_BYTES = 256 * 1024
 
 COVER_NAMES = ("cover", "folder", "front", "capa", "album", "albumart", "albumartsmall")
+# Encarte, verso e foto do CD: só se não houver outra imagem.
+NOT_FRONT_NAMES = ("back", "verso", "contracapa", "cd", "disc", "disco", "inlay", "inside", "tray", "booklet", "encarte")
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp")
+# Subpastas onde rips locais costumam guardar a arte do álbum.
+ART_DIRS = ("covers", "cover", "artwork", "art", "scans", "images", "capa", "capas", "encarte", "fotos")
+MAX_DRIVE_IMAGE = 8 * 1024 * 1024
+MAX_LOCAL_IMAGE = 64 * 1024 * 1024  # do disco não custa nada ler a imagem inteira
 
 
 def cache_dir() -> Path:
@@ -245,18 +252,74 @@ def embedded_cover(fetch: Callable[[int, int], bytes]) -> bytes | None:
     return _id3_cover(reader) or _flac_cover(reader)
 
 
+def _is_image(item: DriveItem) -> bool:
+    return item.mime_type.startswith("image/") or item.name.lower().endswith(IMAGE_EXTENSIONS)
+
+
+def _cover_rank(name: str) -> int:
+    """0 e 1: nome de capa (cover, folder, AlbumArt_…_Large); 2: qualquer outra; 3: verso, CD, miniatura."""
+    stem = name.rsplit(".", 1)[0].lower().strip()
+    words = set(re.split(r"[^a-z0-9]+", stem))
+    if words & set(NOT_FRONT_NAMES) or "small" in stem or "thumb" in stem:
+        return 3  # AlbumArtSmall.jpg é a miniatura do Windows Media Player
+    if stem in COVER_NAMES:
+        return 0
+    if any(n in stem for n in COVER_NAMES):
+        return 1
+    return 2
+
+
+def _cover_order(item: DriveItem) -> tuple:
+    return (_cover_rank(item.name), -(item.size or 0), item.name.lower())  # a maior primeiro
+
+
 def folder_cover_candidates(siblings: Sequence[DriveItem]) -> list[DriveItem]:
-    """Imagens da pasta, com cover/folder/capa… primeiro."""
-    images = [
-        i for i in siblings
-        if i.mime_type.startswith("image/") or i.name.lower().endswith(IMAGE_EXTENSIONS)
-    ]
+    """Imagens da pasta, com cover/folder/capa… primeiro e verso/encarte/miniatura por último."""
+    images = [i for i in siblings if _is_image(i)]
+    return sorted(images, key=_cover_order)
 
-    def rank(item: DriveItem) -> tuple:
-        stem = item.name.rsplit(".", 1)[0].lower().strip()
-        return (0 if stem in COVER_NAMES else 1 if any(n in stem for n in COVER_NAMES) else 2, item.name.lower())
 
-    return sorted(images, key=rank)
+def local_cover_candidates(track_path: str) -> list[DriveItem]:
+    """Imagens ao lado de uma faixa do disco e nas subpastas de arte (Covers/, Artwork/…).
+
+    Lê a pasta de novo em vez de usar a listagem da interface, para achar
+    imagens colocadas depois que a pasta foi aberta.
+    """
+    from nimbus.local import iter_local_children, LOCAL_PREFIX
+
+    folder = os.path.dirname(track_path)
+    found: list[tuple] = []
+    try:
+        children = list(iter_local_children(LOCAL_PREFIX + folder))
+    except Exception:
+        return []
+    for child in children:
+        if child.is_folder and child.name.casefold() in ART_DIRS:
+            try:
+                found += [(1, i) for i in iter_local_children(child.id) if not i.is_folder and _is_image(i)]
+            except Exception:
+                continue
+        elif not child.is_folder and _is_image(child):
+            found.append((0, child))
+    found.sort(key=lambda t: (_cover_rank(t[1].name), t[0], -(t[1].size or 0), t[1].name.lower()))
+    return [i for _, i in found]
+
+
+def image_decodes(data: bytes | None) -> bool:
+    """A imagem abre de verdade? Evita mostrar nada por causa de capa embutida
+    corrompida, arquivo cortado ou formato que o Pillow não lê."""
+    if not data:
+        return False
+    try:
+        from PIL import Image
+    except ImportError:  # sem Pillow não dá para conferir
+        return True
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            img.load()
+        return True
+    except Exception:
+        return False
 
 
 def is_compilation(siblings: Sequence[DriveItem]) -> bool:
@@ -530,6 +593,15 @@ class CoverCache:
             pass
 
 
+def _file_stamp(path: str) -> str:
+    """Tamanho e data do arquivo, para a capa em cache mudar quando o arquivo mudar."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return ""
+    return f"@{st.st_size}:{st.st_mtime_ns}"
+
+
 def drive_fetcher(file_id: str, token: Callable[[], str], timeout: float = 15.0) -> Callable[[int, int], bytes]:
     def fetch(start: int, end: int) -> bytes:
         req = urllib.request.Request(media_url(file_id), headers={
@@ -647,9 +719,20 @@ class MetadataResolver:
         entry = self.store.get(item.id)
         if entry and entry.get("complete"):
             cover = self.covers.get(entry["cover_key"]) if entry.get("cover_key") else None
-            if cover or not entry.get("cover_key"):  # capa sumiu do cache: refaz
-                return Resolved(info=self.known(item), cover=cover, cover_source=entry.get("cover_source", ""),
-                                note=entry.get("note", ""))
+            if cover and entry.get("cover_source") in ("arquivo", "pasta") and not image_decodes(cover):
+                cover = None  # capa local que não abre (versões antigas): refaz
+            elif cover or not entry.get("cover_key"):  # capa sumiu do cache: refaz
+                out = Resolved(info=self.known(item), cover=cover, cover_source=entry.get("cover_source", ""),
+                               note=entry.get("note", ""))
+                if is_local_id(item.id) and out.cover_source in ("", "arquivo", "pasta"):
+                    # Olhar o disco é barato: pega imagem posta ou trocada na pasta depois.
+                    fresh = Resolved(info=out.info)
+                    key = self._local_cover(item, siblings, self._basic(item, tags, folder_name)[1], fresh, [])
+                    if key and key != entry.get("cover_key"):
+                        entry.update(cover_key=key, cover_source=fresh.cover_source, note="")
+                        self.store.put(item.id, entry)
+                        out.cover, out.cover_source, out.note = fresh.cover, fresh.cover_source, ""
+                return out
 
         errors: list = []
         out, cover_key = self._resolve(item, tags, siblings, folder_name, errors)
@@ -720,20 +803,40 @@ class MetadataResolver:
 
     def _local_cover(self, item: DriveItem, siblings: Sequence[DriveItem], junk_tags: bool,
                      out: Resolved, errors: list) -> str:
-        """Capa embutida (se as tags não são propaganda) ou, sem ela, imagem da pasta."""
-        key = f"embedded:{item.id}"
+        """Capa embutida (se as tags não são propaganda) ou imagem da pasta.
+
+        No Drive a capa embutida vem primeiro. No disco, uma imagem com nome de
+        capa (Folder.jpg, cover.jpg…) ganha da embutida: quem montou a pasta
+        escolheu aquela imagem para o álbum. Só vale imagem que abre: capa
+        corrompida ou cortada passa a vez para a próxima.
+        """
+        local = is_local_id(item.id)
+        if local:
+            candidates, limit, max_bytes = local_cover_candidates(local_path(item.id)), 6, MAX_LOCAL_IMAGE
+        else:
+            candidates, limit, max_bytes = folder_cover_candidates(siblings), 2, MAX_DRIVE_IMAGE
+        candidates = candidates[:limit]
+
+        def from_folder(images: Sequence[DriveItem]) -> str:
+            for img in images:
+                key = f"file:{img.id}" + _file_stamp(local_path(img.id)) if local else f"drive:{img.id}"
+                cover = self._cached(key, lambda img=img: self._fetcher(img.id)(0, max_bytes - 1), errors)
+                if cover and image_decodes(cover):
+                    out.cover, out.cover_source = cover, "pasta"
+                    return key
+            return ""
+
+        named = [i for i in candidates if _cover_rank(i.name) <= 1] if local else []
+        key = from_folder(named)
+        if key:
+            return key
+        key = f"embedded:{item.id}" + (_file_stamp(local_path(item.id)) if local else "")
         # Quem grava propaganda nas tags costuma pôr a própria arte como capa.
         cover = None if junk_tags else self._cached(key, lambda: embedded_cover(self._fetcher(item.id)), errors)
-        if cover:
+        if cover and image_decodes(cover):
             out.cover, out.cover_source = cover, "arquivo"
             return key
-        for img in folder_cover_candidates(siblings)[:2]:
-            key = f"drive:{img.id}"
-            cover = self._cached(key, lambda img=img: self._fetcher(img.id)(0, 8 * 1024 * 1024 - 1), errors)
-            if cover:
-                out.cover, out.cover_source = cover, "pasta"
-                return key
-        return ""
+        return from_folder([i for i in candidates if i not in named])
 
     def _cached(self, key: str, compute: Callable[[], bytes | None], errors: list | None = None) -> bytes | None:
         if self.covers.has(key):

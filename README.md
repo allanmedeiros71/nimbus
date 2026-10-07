@@ -124,7 +124,7 @@ nimbus uses whatever is available, in this order:
 1. File tags read by mpv (title, artist, album, genre, year).
 2. The file name (`01 - Artist - Title.mp3`) and the folder name, when tags are missing.
 3. The cover embedded in the MP3 or FLAC. Only the beginning of the file, where the cover lives, is read.
-4. An image in the same Drive folder (`cover.jpg`, `folder.png`, `capa.jpg`…).
+4. An image in the same folder (`cover.jpg`, `folder.png`, `capa.jpg`…). For music on this computer, art subfolders such as `Covers/`, `Artwork/` or `Scans/` are searched too, and images that fail to open are skipped. For music on this computer, an image named like a cover (`Folder.jpg`, `cover.jpg`, `AlbumArt_…_Large.jpg`) wins over the embedded cover, and thumbnails such as `AlbumArtSmall.jpg` come last.
 5. [MusicBrainz](https://musicbrainz.org) to fill in album, year and genre, and the [Cover Art Archive](https://coverartarchive.org) for the cover. If the Cover Art Archive does not have the cover or cannot be reached from your network, the public iTunes search and then Deezer's serve as fallbacks. Only artist, title and album are sent. Use `--offline` or `NIMBUS_OFFLINE=1` to turn this off.
 
 In compilations (folders with tracks by different artists, judging by the file names) the cover comes first from each song's original release on the Cover Art Archive; the embedded cover and the folder image are fallbacks, since they tend to be the same on every track.
