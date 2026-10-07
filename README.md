@@ -136,7 +136,7 @@ Each resolved song is saved in `~/.cache/nimbus/tracks.json`, keyed by its Drive
 
 Covers and responses are cached in `~/.cache/nimbus`. The "dados: … · capa: …" (data: … · cover: …) line in the panel shows where each piece came from.
 
-The cover is drawn with colored blocks, which works in any terminal with colors. In terminals with real image support you can ask for higher resolution: `NIMBUS_COVER=iterm` (WezTerm, iTerm2), `NIMBUS_COVER=kitty` (kitty, Ghostty), `NIMBUS_COVER=sixel` (foot, Konsole) or `NIMBUS_COVER=auto` to detect (in WezTerm and iTerm2, `auto` picks `iterm`). If garbage shows up instead of the cover, go back to the default (`NIMBUS_COVER=blocks`). `NIMBUS_COVER=off` hides the cover.
+The cover is drawn with colored blocks, which works in any terminal with colors. In terminals with real image support you can ask for higher resolution: `NIMBUS_COVER=iterm` (WezTerm, iTerm2), `NIMBUS_COVER=kitty` (kitty, Ghostty), `NIMBUS_COVER=sixel` (foot, Konsole) or `NIMBUS_COVER=auto` to detect (in WezTerm and iTerm2, `auto` picks `iterm`). If garbage shows up instead of the cover, go back to the default (`NIMBUS_COVER=blocks`). `NIMBUS_COVER=off` hides the cover. To keep a mode, add it to your shell config, for example `export NIMBUS_COVER=auto` in `~/.zshrc`.
 
 ## Command line
 
