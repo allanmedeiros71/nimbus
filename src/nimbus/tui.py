@@ -34,7 +34,7 @@ from nimbus.local import LOCAL_ROOT, is_local, local_path, local_root
 from nimbus.metadata import MetadataResolver, TrackInfo
 from nimbus.playback import Controller, PlayQueue
 
-KEYS_LINE = "␣ play/pause · n/p faixa · </> ±10s · +/- vol · r repeat · s shuffle · c capa · ? ajuda · q sair"
+KEYS_LINE = "␣ play/pause · n/p faixa · </> ±10s · +/- vol · r repeat · s shuffle · ? ajuda · q sair"
 
 HELP_TEXT = """\
 [b]Reprodução[/b]
@@ -45,7 +45,6 @@ HELP_TEXT = """\
   m            mudo
   r            repeat: off → all → one
   s            shuffle liga/desliga
-  c            capa grande / pequena
 
 [b]Navegação (estilo vim)[/b]
   j  k         desce / sobe
@@ -237,10 +236,6 @@ class NimbusApp(App):
     #tracks { width: 1fr; height: 100%; border: round $primary; }
     #tree { height: 100%; }
     #tree:focus, #tracks:focus { border: round $accent; }
-    /* c: capa grande, com quatro vezes mais pontos que a pequena */
-    .big-cover #playback { height: 18; }
-    .big-cover #pb-top { height: 14; }
-    .big-cover #cover { width: 28; height: 14; }
     """
 
     BINDINGS = [
@@ -254,7 +249,6 @@ class NimbusApp(App):
         Binding("m", "mute", "mudo", priority=True),
         Binding("r", "repeat", "repeat", priority=True),
         Binding("s", "shuffle", "shuffle", priority=True),
-        Binding("c", "cover_size", "capa", priority=True),
         Binding("question_mark", "help", "ajuda"),
         Binding("q", "quit", "sair"),
     ]
@@ -641,9 +635,6 @@ class NimbusApp(App):
             if self.ctl is not None:
                 self.ctl.queue.set_shuffle(self.shuffle)
         self._tick()
-
-    def action_cover_size(self) -> None:
-        self.screen.toggle_class("big-cover")
 
     def action_help(self) -> None:
         self.push_screen(HelpScreen())

@@ -96,7 +96,6 @@ Em cima fica o painel **Playback**: capa do álbum, título • artista, álbum 
 | `m` | mudo |
 | `r` | repeat: off → all → one |
 | `s` | shuffle (a faixa atual continua tocando) |
-| `c` | capa maior / menor (28×14 em vez de 14×7 caracteres) |
 | `j` / `k` | desce / sobe |
 | `h` / `l` | na árvore fecha a pasta ou sobe / abre a pasta (e, se já aberta, vai para a lista); na lista volta para a árvore / entra na pasta |
 | `g` / `G` | primeiro / último item |

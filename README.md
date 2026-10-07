@@ -98,7 +98,6 @@ At the top is the **Playback** panel: album cover, title • artist, album • g
 | `m` | mute |
 | `r` | repeat: off → all → one |
 | `s` | shuffle (the current track keeps playing) |
-| `c` | bigger / smaller cover (28×14 instead of 14×7 characters) |
 | `j` / `k` | down / up |
 | `h` / `l` | in the tree, collapse the folder or go up / expand the folder (and, if already expanded, move to the list); in the list, go back to the tree / enter the folder |
 | `g` / `G` | first / last item |
