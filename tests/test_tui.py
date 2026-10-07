@@ -240,6 +240,14 @@ def test_cover_widget_mounts_image(setup):
             drawn = cover.query_one(BlockImage).render()
             assert drawn.plain.count("▀") == 14 * 7  # só meios-blocos, nada de texto de Sixel
 
+            await pilot.press("c")  # capa grande
+            await pilot.pause(0.1)
+            assert (cover.size.width, cover.size.height) == (28, 14)
+            assert cover.query_one(BlockImage).render().plain.count("▀") == 28 * 14
+            await pilot.press("c")
+            await pilot.pause(0.1)
+            assert (cover.size.width, cover.size.height) == (14, 7)
+
     asyncio.run(scenario())
 
 
