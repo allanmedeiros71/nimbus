@@ -832,6 +832,14 @@ class BlockImage(Widget):
         return text
 
 
+def _iterm_terminal() -> bool:
+    """WezTerm ou iTerm2, também dentro do tmux (que troca o TERM_PROGRAM por "tmux")."""
+    env = os.environ
+    return (env.get("TERM_PROGRAM") in ("WezTerm", "iTerm.app")
+            or bool(env.get("WEZTERM_PANE") or env.get("WEZTERM_EXECUTABLE"))
+            or env.get("LC_TERMINAL") == "iTerm2")
+
+
 def image_factory_from_env() -> Optional[Callable]:
     """Escolhe como desenhar a capa pela variável NIMBUS_COVER.
 
@@ -852,7 +860,7 @@ def image_factory_from_env() -> Optional[Callable]:
         return None
     if mode not in ("auto", "sixel", "kitty", "tgp", "iterm", "iterm2", "wezterm"):
         return BlockImage
-    if mode == "auto" and os.environ.get("TERM_PROGRAM") in ("WezTerm", "iTerm.app"):
+    if mode == "auto" and _iterm_terminal():
         mode = "iterm"  # o kitty do WezTerm não entende os caracteres de posição do textual-image
     try:
         if mode in ("iterm", "iterm2", "wezterm"):
