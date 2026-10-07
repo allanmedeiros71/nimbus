@@ -845,9 +845,11 @@ def image_factory_from_env() -> Optional[Callable]:
     """Escolhe como desenhar a capa pela variável NIMBUS_COVER.
 
     blocks (padrão): meios-blocos coloridos, funciona em qualquer terminal.
-    auto: deixa o textual-image escolher Sixel ou o protocolo do kitty, se o
-          terminal disser que aceita. Alguns terminais dizem que aceitam e
-          mostram lixo, por isso não é o padrão.
+    auto: no WezTerm e no iTerm2 usa o protocolo do iTerm2; nos outros deixa o
+          textual-image escolher Sixel ou o protocolo do kitty, se o terminal
+          disser que aceita. Alguns terminais dizem que aceitam e mostram
+          lixo, por isso não é o padrão.
+    iterm: protocolo de imagens do iTerm2 (WezTerm, iTerm2).
     sixel, kitty: força um desses protocolos.
     off: sem capa.
 
@@ -857,10 +859,14 @@ def image_factory_from_env() -> Optional[Callable]:
     mode = os.environ.get("NIMBUS_COVER", "blocks").strip().lower()
     if mode in ("off", "none", "0"):
         return None
-    if mode not in ("auto", "sixel", "kitty", "tgp"):
+    if mode not in ("auto", "sixel", "kitty", "tgp", "iterm", "iterm2", "wezterm"):
         return BlockImage
+    if mode == "auto" and os.environ.get("TERM_PROGRAM") in ("WezTerm", "iTerm.app"):
+        mode = "iterm"  # o kitty do WezTerm não entende os caracteres de posição do textual-image
     try:
-        if mode == "sixel":
+        if mode in ("iterm", "iterm2", "wezterm"):
+            from nimbus.iterm import ITermImage as ImageWidget
+        elif mode == "sixel":
             from textual_image.widget import SixelImage as ImageWidget
         elif mode in ("kitty", "tgp"):
             from textual_image.widget import TGPImage as ImageWidget

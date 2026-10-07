@@ -134,7 +134,7 @@ Cada música resolvida fica salva em `~/.cache/nimbus/tracks.json`, pelo ID do a
 
 Capas e respostas ficam em cache em `~/.cache/nimbus`. A linha "dados: … · capa: …" no painel mostra de onde veio cada coisa.
 
-A capa é desenhada com blocos coloridos, o que funciona em qualquer terminal com cores. Em terminais com imagens de verdade dá para pedir mais resolução: `NIMBUS_COVER=kitty` (kitty, Ghostty, WezTerm), `NIMBUS_COVER=sixel` (foot, WezTerm, Konsole, iTerm2) ou `NIMBUS_COVER=auto` para detectar. Se aparecer lixo no lugar da capa, volte para o padrão (`NIMBUS_COVER=blocks`). `NIMBUS_COVER=off` esconde a capa.
+A capa é desenhada com blocos coloridos, o que funciona em qualquer terminal com cores. Em terminais com imagens de verdade dá para pedir mais resolução: `NIMBUS_COVER=iterm` (WezTerm, iTerm2), `NIMBUS_COVER=kitty` (kitty, Ghostty), `NIMBUS_COVER=sixel` (foot, Konsole) ou `NIMBUS_COVER=auto` para detectar (no WezTerm e no iTerm2 o `auto` escolhe `iterm`). Se aparecer lixo no lugar da capa, volte para o padrão (`NIMBUS_COVER=blocks`). `NIMBUS_COVER=off` esconde a capa.
 
 ## Linha de comando
 
@@ -191,7 +191,7 @@ Teclas durante o `nimbus play`: `espaço` pausa, `n` próxima, `p` anterior, `�
 - `cli.py` tem os comandos de linha de comando e abre a interface quando não há comando.
 - `completion.py` gera os scripts de autocomplete e responde ao `Tab` com as pastas do Drive.
 
-Variáveis úteis: `NIMBUS_CONFIG_DIR` muda a pasta de configuração, `NIMBUS_MPV` aponta para outro executável do mpv, `NIMBUS_COVER` escolhe como desenhar a capa (`blocks`, `kitty`, `sixel`, `auto`, `off`) e `NIMBUS_OFFLINE=1` desliga as consultas à internet.
+Variáveis úteis: `NIMBUS_CONFIG_DIR` muda a pasta de configuração, `NIMBUS_MPV` aponta para outro executável do mpv, `NIMBUS_COVER` escolhe como desenhar a capa (`blocks`, `iterm`, `kitty`, `sixel`, `auto`, `off`) e `NIMBUS_OFFLINE=1` desliga as consultas à internet.
 
 ## Testes
 

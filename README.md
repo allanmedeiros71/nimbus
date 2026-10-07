@@ -136,7 +136,7 @@ Each resolved song is saved in `~/.cache/nimbus/tracks.json`, keyed by its Drive
 
 Covers and responses are cached in `~/.cache/nimbus`. The "dados: … · capa: …" (data: … · cover: …) line in the panel shows where each piece came from.
 
-The cover is drawn with colored blocks, which works in any terminal with colors. In terminals with real image support you can ask for higher resolution: `NIMBUS_COVER=kitty` (kitty, Ghostty, WezTerm), `NIMBUS_COVER=sixel` (foot, WezTerm, Konsole, iTerm2) or `NIMBUS_COVER=auto` to detect. If garbage shows up instead of the cover, go back to the default (`NIMBUS_COVER=blocks`). `NIMBUS_COVER=off` hides the cover.
+The cover is drawn with colored blocks, which works in any terminal with colors. In terminals with real image support you can ask for higher resolution: `NIMBUS_COVER=iterm` (WezTerm, iTerm2), `NIMBUS_COVER=kitty` (kitty, Ghostty), `NIMBUS_COVER=sixel` (foot, Konsole) or `NIMBUS_COVER=auto` to detect (in WezTerm and iTerm2, `auto` picks `iterm`). If garbage shows up instead of the cover, go back to the default (`NIMBUS_COVER=blocks`). `NIMBUS_COVER=off` hides the cover.
 
 ## Command line
 
@@ -193,7 +193,7 @@ Keys during `nimbus play`: `space` pauses, `n` next, `p` previous, `←`/`→` b
 - `cli.py` has the command-line commands and opens the interface when no command is given.
 - `completion.py` generates the completion scripts and answers `Tab` with the Drive folders.
 
-Useful variables: `NIMBUS_CONFIG_DIR` changes the configuration folder, `NIMBUS_MPV` points to another mpv executable, `NIMBUS_COVER` chooses how to draw the cover (`blocks`, `kitty`, `sixel`, `auto`, `off`) and `NIMBUS_OFFLINE=1` turns off internet lookups.
+Useful variables: `NIMBUS_CONFIG_DIR` changes the configuration folder, `NIMBUS_MPV` points to another mpv executable, `NIMBUS_COVER` chooses how to draw the cover (`blocks`, `iterm`, `kitty`, `sixel`, `auto`, `off`) and `NIMBUS_OFFLINE=1` turns off internet lookups.
 
 ## Tests
 
