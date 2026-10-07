@@ -1,45 +1,49 @@
 # nimbus
 
-Player de terminal (Linux e macOS) que toca em streaming as músicas das suas pastas do Google Drive. O acesso é somente leitura e nada é baixado antes: o mpv lê cada faixa por partes, uns dois minutos à frente do que está tocando.
+**English** · [Português](README.pt-BR.md)
 
-Também toca as músicas do próprio computador: pasta pessoal, HD externo e pendrive. Essa parte funciona mesmo sem login no Google.
+A terminal player (Linux and macOS) that streams the music in your Google Drive folders. Access is read-only and nothing is downloaded up front: mpv reads each track in chunks, about two minutes ahead of what is playing.
 
-## Requisitos
+It also plays music from your own computer: home folder, external drive and USB stick. That part works even without signing in to Google.
 
-- Python 3.9 ou mais novo
-- [mpv](https://mpv.io): `brew install mpv` no macOS, `sudo apt install mpv` no Debian/Ubuntu
+The interface and command-line messages are currently in Portuguese.
 
-Com a instalação pelo Homebrew, os dois já vêm junto.
+## Requirements
 
-## Instalação
+- Python 3.9 or newer
+- [mpv](https://mpv.io): `brew install mpv` on macOS, `sudo apt install mpv` on Debian/Ubuntu
 
-### Homebrew (macOS e Linux)
+The Homebrew installation brings both along.
+
+## Installation
+
+### Homebrew (macOS and Linux)
 
 ```sh
 brew install allanmedeiros71/tap/nimbus
 ```
 
-O Homebrew já instala o mpv e o Python junto. Para atualizar: `brew upgrade nimbus`.
+Homebrew installs mpv and Python along with it. To update: `brew upgrade nimbus`.
 
 ### pipx
 
-O [pipx](https://pipx.pypa.io) cria um ambiente isolado para o nimbus e deixa o comando `nimbus` disponível em qualquer pasta e em qualquer terminal, o que também é necessário para o autocomplete. Nesse caso o mpv é instalado à parte (veja Requisitos). No PyPI o pacote se chama `nimbus-player`; o comando continua sendo `nimbus`.
+[pipx](https://pipx.pypa.io) creates an isolated environment for nimbus and makes the `nimbus` command available from any folder and any terminal, which shell completion also needs. In this case mpv is installed separately (see Requirements). On PyPI the package is called `nimbus-player`; the command is still `nimbus`.
 
 ```sh
 brew install pipx          # macOS
 sudo apt install pipx      # Debian/Ubuntu
-pipx ensurepath            # coloca ~/.local/bin no PATH
+pipx ensurepath            # adds ~/.local/bin to PATH
 
 pipx install nimbus-player
 ```
 
-Depois do `pipx ensurepath`, **abra um terminal novo** para o PATH valer. Para atualizar: `pipx upgrade nimbus-player`.
+After `pipx ensurepath`, **open a new terminal** so the PATH change takes effect. To update: `pipx upgrade nimbus-player`.
 
-Se você instalou uma versão antiga a partir do GitHub, troque pela do PyPI: `pipx uninstall nimbus && pipx install nimbus-player`.
+If you installed an older version from GitHub, switch to the PyPI one: `pipx uninstall nimbus && pipx install nimbus-player`.
 
-Para usar o código do repositório (versão em desenvolvimento): `git clone git@github.com:allanmedeiros71/nimbus.git` e `pipx install -e ./nimbus`. Com `-e`, um `git pull` dentro da pasta já atualiza o comando; só rode `pipx install -e --force ./nimbus` de novo se mudarem as dependências.
+To run the code from the repository (development version): `git clone git@github.com:allanmedeiros71/nimbus.git` and `pipx install -e ./nimbus`. With `-e`, a `git pull` inside the folder already updates the command; only run `pipx install -e --force ./nimbus` again if the dependencies change.
 
-### Alternativa para desenvolvimento: ambiente virtual
+### Alternative for development: virtual environment
 
 ```sh
 cd nimbus
@@ -48,164 +52,164 @@ source .venv/bin/activate
 pip install -e '.[dev]'
 ```
 
-Nesse caso o comando `nimbus` só existe com o ambiente ativado: em cada terminal novo rode `source .venv/bin/activate` antes.
+In this case the `nimbus` command only exists while the environment is active: run `source .venv/bin/activate` in every new terminal first.
 
-### Problemas comuns
+### Common problems
 
-- **`zsh: command not found: pip`**: no macOS com Homebrew e em Debian/Ubuntu recentes não existe `pip` solto e o Python do sistema não aceita pacotes. Use o pipx (acima) ou um ambiente virtual.
-- **`zsh: permissão negada: nimbus`** ou **`command not found: nimbus`** fora da pasta do projeto: o comando só estava instalado no venv. Confira com `type -a nimbus`; se não aparecer um caminho como `~/.local/bin/nimbus`, instale com o pipx, rode `pipx ensurepath` e abra um terminal novo.
-- **`mpv não encontrado`**: instale com `brew install mpv` ou `sudo apt install mpv`.
+- **`zsh: command not found: pip`**: on macOS with Homebrew and on recent Debian/Ubuntu there is no standalone `pip`, and the system Python does not accept packages. Use pipx (above) or a virtual environment.
+- **`zsh: permission denied: nimbus`** or **`command not found: nimbus`** outside the project folder: the command was only installed in the venv. Check with `type -a nimbus`; if no path like `~/.local/bin/nimbus` shows up, install with pipx, run `pipx ensurepath` and open a new terminal.
+- **`mpv não encontrado`** (mpv not found): install it with `brew install mpv` or `sudo apt install mpv`.
 
-## Credenciais do Google (uma vez só)
+## Google credentials (one time only)
 
-O nimbus usa o seu próprio cliente OAuth, então o acesso fica só entre você e o Google.
+nimbus uses your own OAuth client, so access stays between you and Google.
 
-1. Abra o [Google Cloud Console](https://console.cloud.google.com/) e crie um projeto (ou use um existente).
-2. Em **APIs e serviços > Biblioteca**, ative a **Google Drive API**.
-3. Em **APIs e serviços > Tela de consentimento OAuth**, configure como **Externo**, e em **Usuários de teste** adicione o seu e-mail.
-4. Em **APIs e serviços > Credenciais**, clique em **Criar credenciais > ID do cliente OAuth**, tipo **App para computador**.
-5. Baixe o JSON e salve como `~/.config/nimbus/client_secret.json`.
+1. Open the [Google Cloud Console](https://console.cloud.google.com/) and create a project (or use an existing one).
+2. In **APIs & Services > Library**, enable the **Google Drive API**.
+3. In **APIs & Services > OAuth consent screen**, choose **External**, and add your email under **Test users**.
+4. In **APIs & Services > Credentials**, click **Create credentials > OAuth client ID**, type **Desktop app**.
+5. Download the JSON and save it as `~/.config/nimbus/client_secret.json`.
 
-Depois:
+Then:
 
 ```sh
 nimbus login
 ```
 
-O navegador abre pedindo permissão de leitura do Drive (`drive.readonly`). O token fica em `~/.config/nimbus/token.json`, legível só pelo seu usuário. `nimbus logout` apaga o token.
+The browser opens asking for read permission on Drive (`drive.readonly`). The token is stored in `~/.config/nimbus/token.json`, readable only by your user. `nimbus logout` deletes the token.
 
-## Interface visual
+## Visual interface
 
 ```sh
-nimbus                      # abre a interface
-nimbus tui "Música/Rock"    # abre já com essa pasta selecionada
-nimbus tui ~/Música         # ou com uma pasta do computador
-nimbus tui --offline        # sem consultar MusicBrainz/Cover Art Archive
+nimbus                      # opens the interface
+nimbus tui "Música/Rock"    # opens with this folder already selected
+nimbus tui ~/Música         # or with a folder on your computer
+nimbus tui --offline        # without querying MusicBrainz/Cover Art Archive
 ```
 
-Em cima fica o painel **Playback**: capa do álbum, título • artista, álbum • gênero • ano, o ícone de tocando/pausado, repeat, shuffle, volume, a posição na fila e uma barra de progresso. Embaixo, **Directories**: a árvore de pastas (Meu Drive, Compartilhados comigo e Este computador) à esquerda e o conteúdo da pasta selecionada à direita. `Enter` numa música toca a pasta inteira a partir dela. Para economizar banda e chamadas à API, uma pasta do Drive só é listada à direita quando você aperta `Enter` ou `→`/`l` nela; pastas já abertas e as do computador aparecem na hora, durante a navegação.
+At the top is the **Playback** panel: album cover, title • artist, album • genre • year, the playing/paused icon, repeat, shuffle, volume, the position in the queue and a progress bar. Below it, **Directories**: the folder tree (Meu Drive, Compartilhados comigo and Este computador, i.e. My Drive, Shared with me and This computer) on the left and the contents of the selected folder on the right. `Enter` on a song plays the whole folder starting from it. To save bandwidth and API calls, a Drive folder is only listed on the right when you press `Enter` or `→`/`l` on it; folders already opened and folders on your computer show up instantly, as you navigate.
 
-| Tecla | Ação |
+| Key | Action |
 |---|---|
-| `espaço` | tocar / pausar |
-| `n` / `p` | próxima / anterior |
-| `>` `<` (ou `.` `,`) | avança / volta 10s |
+| `space` | play / pause |
+| `n` / `p` | next / previous |
+| `>` `<` (or `.` `,`) | forward / back 10s |
 | `+` / `-` | volume |
-| `m` | mudo |
+| `m` | mute |
 | `r` | repeat: off → all → one |
-| `s` | shuffle (a faixa atual continua tocando) |
-| `j` / `k` | desce / sobe |
-| `h` / `l` | na árvore fecha a pasta ou sobe / abre a pasta (e, se já aberta, vai para a lista); na lista volta para a árvore / entra na pasta |
-| `g` / `G` | primeiro / último item |
-| `Tab` | alterna entre árvore e lista |
-| `Enter` | toca a música ou entra na subpasta |
-| `?` | ajuda |
-| `q` | sair |
+| `s` | shuffle (the current track keeps playing) |
+| `j` / `k` | down / up |
+| `h` / `l` | in the tree, collapse the folder or go up / expand the folder (and, if already expanded, move to the list); in the list, go back to the tree / enter the folder |
+| `g` / `G` | first / last item |
+| `Tab` | switch between tree and list |
+| `Enter` | play the song or enter the subfolder |
+| `?` | help |
+| `q` | quit |
 
-### Músicas do computador, HD externo e pendrive
+### Music on your computer, external drive and USB stick
 
-A raiz **Este computador** da árvore mostra a pasta pessoal, os discos externos montados e o disco do sistema (`/`). Os discos externos são procurados onde cada sistema os monta:
+The **Este computador** (This computer) root in the tree shows your home folder, mounted external drives and the system disk (`/`). External drives are looked up where each system mounts them:
 
-- macOS: `/Volumes` (o disco do sistema, que lá aparece como atalho para `/`, fica de fora);
-- Linux: `/media/<usuário>/…` (Ubuntu, Debian), `/run/media/<usuário>/…` (Fedora, Arch), `/media/…` e os pontos de montagem em `/mnt`.
+- macOS: `/Volumes` (the system disk, which shows up there as a link to `/`, is left out);
+- Linux: `/media/<user>/…` (Ubuntu, Debian), `/run/media/<user>/…` (Fedora, Arch), `/media/…` and the mount points in `/mnt`.
 
-Um pendrive conectado com a interface já aberta só aparece ao reabrir o nimbus. Pastas e arquivos ocultos (começando com `.`) não aparecem, e listas de reprodução (`.m3u`, `.pls`) não entram na fila. O mpv lê os arquivos direto do disco, e a capa vem do próprio arquivo ou de uma imagem da pasta, como no Drive.
+A USB stick plugged in while the interface is open only shows up after reopening nimbus. Hidden folders and files (starting with `.`) are not shown, and playlists (`.m3u`, `.pls`) are not added to the queue. mpv reads the files straight from disk, and the cover comes from the file itself or from an image in the folder, as with Drive.
 
-Sem login no Google, `nimbus` abre só com **Este computador**.
+Without a Google login, `nimbus` opens with only **Este computador**.
 
-### Capa e metadados
+### Cover art and metadata
 
-O nimbus usa, nesta ordem, o que estiver disponível:
+nimbus uses whatever is available, in this order:
 
-1. Tags do arquivo lidas pelo mpv (título, artista, álbum, gênero, ano).
-2. O nome do arquivo (`01 - Artista - Título.mp3`) e da pasta, quando faltam tags.
-3. A capa embutida no MP3 ou FLAC. Só o começo do arquivo é lido, onde a capa fica.
-4. Uma imagem na mesma pasta do Drive (`cover.jpg`, `folder.png`, `capa.jpg`…).
-5. [MusicBrainz](https://musicbrainz.org) para completar álbum, ano e gênero, e o [Cover Art Archive](https://coverartarchive.org) para a capa. Se o Cover Art Archive não tiver a capa ou não for acessível na sua rede, a busca pública do iTunes e, depois, a do Deezer servem de reserva. Só artista, título e álbum são enviados. Use `--offline` ou `NIMBUS_OFFLINE=1` para desligar.
+1. File tags read by mpv (title, artist, album, genre, year).
+2. The file name (`01 - Artist - Title.mp3`) and the folder name, when tags are missing.
+3. The cover embedded in the MP3 or FLAC. Only the beginning of the file, where the cover lives, is read.
+4. An image in the same Drive folder (`cover.jpg`, `folder.png`, `capa.jpg`…).
+5. [MusicBrainz](https://musicbrainz.org) to fill in album, year and genre, and the [Cover Art Archive](https://coverartarchive.org) for the cover. If the Cover Art Archive does not have the cover or cannot be reached from your network, the public iTunes search and then Deezer's serve as fallbacks. Only artist, title and album are sent. Use `--offline` or `NIMBUS_OFFLINE=1` to turn this off.
 
-Em coletâneas (pastas com faixas de artistas diferentes, pelo nome dos arquivos) a capa vem primeiro do disco original de cada música no Cover Art Archive; a capa embutida e a imagem da pasta ficam como reserva, já que costumam ser iguais em todas as faixas.
+In compilations (folders with tracks by different artists, judging by the file names) the cover comes first from each song's original release on the Cover Art Archive; the embedded cover and the folder image are fallbacks, since they tend to be the same on every track.
 
-Tags de propaganda (telefone, WhatsApp, links, como "DJ FULANO 62999999999 WHATSAPP") são ignoradas e o nome do arquivo assume; nesses arquivos a capa embutida também é ignorada.
+Advertising tags (phone numbers, WhatsApp, links, such as "DJ FULANO 62999999999 WHATSAPP") are ignored and the file name takes over; in those files the embedded cover is ignored too.
 
-Cada música resolvida fica salva em `~/.cache/nimbus/tracks.json`, pelo ID do arquivo no Drive: da próxima vez, título, artista, álbum e capa corrigidos aparecem na hora, sem consultar o Drive nem a internet ("salvo" na linha de dados). Nada é gravado no Drive, que continua somente leitura. Se a internet falhar, a faixa é consultada de novo na próxima vez. Apague `tracks.json` para refazer tudo. Gravar as correções nos próprios arquivos está no [backlog](ROADMAP.md).
+Each resolved song is saved in `~/.cache/nimbus/tracks.json`, keyed by its Drive file ID: next time, the corrected title, artist, album and cover show up instantly, without querying Drive or the internet ("salvo", saved, on the data line). Nothing is written to Drive, which stays read-only. If the internet fails, the track is looked up again next time. Delete `tracks.json` to redo everything. Writing the corrections into the files themselves is on the [backlog](ROADMAP.md).
 
-Capas e respostas ficam em cache em `~/.cache/nimbus`. A linha "dados: … · capa: …" no painel mostra de onde veio cada coisa.
+Covers and responses are cached in `~/.cache/nimbus`. The "dados: … · capa: …" (data: … · cover: …) line in the panel shows where each piece came from.
 
-A capa é desenhada com blocos coloridos, o que funciona em qualquer terminal com cores. Em terminais com imagens de verdade dá para pedir mais resolução: `NIMBUS_COVER=kitty` (kitty, Ghostty, WezTerm), `NIMBUS_COVER=sixel` (foot, WezTerm, Konsole, iTerm2) ou `NIMBUS_COVER=auto` para detectar. Se aparecer lixo no lugar da capa, volte para o padrão (`NIMBUS_COVER=blocks`). `NIMBUS_COVER=off` esconde a capa.
+The cover is drawn with colored blocks, which works in any terminal with colors. In terminals with real image support you can ask for higher resolution: `NIMBUS_COVER=kitty` (kitty, Ghostty, WezTerm), `NIMBUS_COVER=sixel` (foot, WezTerm, Konsole, iTerm2) or `NIMBUS_COVER=auto` to detect. If garbage shows up instead of the cover, go back to the default (`NIMBUS_COVER=blocks`). `NIMBUS_COVER=off` hides the cover.
 
-## Linha de comando
+## Command line
 
 ```sh
-nimbus ls                          # raiz de Meu Drive
-nimbus ls "Música/Rock"            # caminho a partir de Meu Drive (maiúsculas não importam)
-nimbus ls https://drive.google.com/drive/folders/<id>   # URL ou ID de pasta, inclusive compartilhadas
-nimbus play "Música/Rock"          # toca a pasta em ordem
-nimbus play "Música" -r -s         # inclui subpastas, ordem aleatória
+nimbus ls                          # root of My Drive
+nimbus ls "Música/Rock"            # path from My Drive (case doesn't matter)
+nimbus ls https://drive.google.com/drive/folders/<id>   # folder URL or ID, shared ones included
+nimbus play "Música/Rock"          # plays the folder in order
+nimbus play "Música" -r -s         # includes subfolders, random order
 
-nimbus ls ~/Música                 # pasta do computador
-nimbus play /Volumes/PENDRIVE -r   # pendrive no macOS
-nimbus play /media/$USER/HD/Discos -s   # HD externo no Linux
-nimbus ls "Este computador"        # pasta pessoal e discos montados
+nimbus ls ~/Música                 # folder on your computer
+nimbus play /Volumes/PENDRIVE -r   # USB stick on macOS
+nimbus play /media/$USER/HD/Discos -s   # external drive on Linux
+nimbus ls "Este computador"        # home folder and mounted drives
 
-nimbus ls "Compartilhados comigo"                 # o que outras pessoas compartilharam com você
-nimbus ls "Compartilhados comigo/Discos do Amigo"
-nimbus play "Compartilhados comigo/Discos do Amigo" -r
+nimbus ls "Shared with me"                 # what other people shared with you
+nimbus ls "Shared with me/Friend's Records"
+nimbus play "Shared with me/Friend's Records" -r
 ```
 
-"Compartilhados comigo" aparece como uma pasta na raiz do `nimbus ls`. Também aceita `Shared with me`, `@compartilhados` ou `@shared`, útil se você tiver uma pasta própria com esse nome. Pastas compartilhadas também podem ser abertas pela URL ou pelo ID, como qualquer outra.
+"Compartilhados comigo" (Shared with me) shows up as a folder at the root of `nimbus ls`. `Shared with me`, `@compartilhados` and `@shared` also work, which is useful if you have a folder of your own with that name. Shared folders can also be opened by URL or ID, like any other.
 
-Um caminho é do computador quando começa com `/`, `~`, `./` ou `../` (também aceita `file://…`). Qualquer outro é procurado no Drive, então para uma pasta relativa do computador use `./Discos`, não só `Discos`.
+A path is on your computer when it starts with `/`, `~`, `./` or `../` (`file://…` also works). Anything else is looked up on Drive, so for a relative folder on your computer use `./Discos`, not just `Discos`.
 
-### Autocomplete de pastas (zsh e bash)
+### Folder completion (zsh and bash)
 
-Com o autocomplete ativo, `Tab` completa os nomes das pastas do Drive em `nimbus ls` e `nimbus play`, uma parte do caminho por vez, inclusive dentro de "Compartilhados comigo". Caminhos do computador (`~/Mú<Tab>`, `/Volumes/<Tab>`) também completam. Maiúsculas e acentos não precisam bater.
+With completion enabled, `Tab` completes Drive folder names in `nimbus ls` and `nimbus play`, one path segment at a time, including inside "Shared with me". Paths on your computer (`~/Mú<Tab>`, `/Volumes/<Tab>`) complete too. Case and accents don't need to match.
 
-zsh (padrão no macOS): adicione ao fim do `~/.zshrc`
+zsh (default on macOS): add to the end of `~/.zshrc`
 
 ```sh
-autoload -Uz compinit && compinit   # se o seu .zshrc ainda não tiver (oh-my-zsh já faz isso)
+autoload -Uz compinit && compinit   # if your .zshrc doesn't have it yet (oh-my-zsh already does this)
 eval "$(nimbus completion zsh)"
 ```
 
-bash: adicione ao `~/.bashrc` (no macOS, `~/.bash_profile`)
+bash: add to `~/.bashrc` (on macOS, `~/.bash_profile`)
 
 ```sh
 eval "$(nimbus completion bash)"
 ```
 
-Abra um terminal novo e teste com `nimbus ls Mú<Tab>`. O `eval` precisa do comando `nimbus` no PATH, por isso use a instalação com Homebrew ou pipx. As listagens ficam em cache por 5 minutos em `~/.cache/nimbus`, então uma pasta recém-criada pode levar esse tempo para aparecer no `Tab`.
+Open a new terminal and test with `nimbus ls Mú<Tab>`. The `eval` needs the `nimbus` command on the PATH, which is why the Homebrew or pipx installation is recommended. Listings are cached for 5 minutes in `~/.cache/nimbus`, so a newly created folder may take that long to show up on `Tab`.
 
-Teclas durante o `nimbus play`: `espaço` pausa, `n` próxima, `p` anterior, `←`/`→` voltam ou avançam 10s, `+`/`-` volume, `q` sai.
+Keys during `nimbus play`: `space` pauses, `n` next, `p` previous, `←`/`→` back or forward 10s, `+`/`-` volume, `q` quits.
 
-## Como funciona
+## How it works
 
-- `drive.py` lista pastas e arquivos pela Drive API v3 (com suporte a drives compartilhados, "Compartilhados comigo" e atalhos). Áudio é detectado pelo tipo MIME ou pela extensão.
-- `player.py` inicia o mpv em modo ocioso e o controla pelo socket JSON IPC. Cada faixa é a URL `files/<id>?alt=media` da API, com o cabeçalho `Authorization: Bearer …` enviado pelo socket, nunca na linha de comando.
-- `local.py` lista pastas do computador e encontra os discos montados; `library.py` junta Drive e computador e encaminha cada pedido para a origem certa. Itens locais têm ID `local:<caminho>`.
-- `playback.py` cuida da fila e pede um token renovado antes de cada faixa do Drive. Arquivos locais vão para o mpv pelo caminho, sem token.
-- `tui.py` é a interface visual (Textual). Os eventos do mpv chegam numa thread própria e a tela só lê o estado num timer, então rede e IPC não travam a interface.
-- `metadata.py` junta tags, nome do arquivo, capa embutida, imagem da pasta e MusicBrainz/Cover Art Archive.
-- `cli.py` tem os comandos de linha de comando e abre a interface quando não há comando.
-- `completion.py` gera os scripts de autocomplete e responde ao `Tab` com as pastas do Drive.
+- `drive.py` lists folders and files through the Drive API v3 (with support for shared drives, "Shared with me" and shortcuts). Audio is detected by MIME type or by extension.
+- `player.py` starts mpv in idle mode and controls it through the JSON IPC socket. Each track is the API URL `files/<id>?alt=media`, with the `Authorization: Bearer …` header sent through the socket, never on the command line.
+- `local.py` lists folders on your computer and finds mounted drives; `library.py` combines Drive and the computer and routes each request to the right source. Local items have the ID `local:<path>`.
+- `playback.py` manages the queue and asks for a refreshed token before each Drive track. Local files go to mpv by path, with no token.
+- `tui.py` is the visual interface (Textual). mpv events arrive on their own thread and the screen only reads the state on a timer, so network and IPC never freeze the interface.
+- `metadata.py` combines tags, file name, embedded cover, folder image and MusicBrainz/Cover Art Archive.
+- `cli.py` has the command-line commands and opens the interface when no command is given.
+- `completion.py` generates the completion scripts and answers `Tab` with the Drive folders.
 
-Variáveis úteis: `NIMBUS_CONFIG_DIR` muda a pasta de configuração, `NIMBUS_MPV` aponta para outro executável do mpv, `NIMBUS_COVER` escolhe como desenhar a capa (`blocks`, `kitty`, `sixel`, `auto`, `off`) e `NIMBUS_OFFLINE=1` desliga as consultas à internet.
+Useful variables: `NIMBUS_CONFIG_DIR` changes the configuration folder, `NIMBUS_MPV` points to another mpv executable, `NIMBUS_COVER` chooses how to draw the cover (`blocks`, `kitty`, `sixel`, `auto`, `off`) and `NIMBUS_OFFLINE=1` turns off internet lookups.
 
-## Testes
+## Tests
 
 ```sh
-source .venv/bin/activate   # ambiente virtual de desenvolvimento (acima)
+source .venv/bin/activate   # development virtual environment (above)
 pytest
 ```
 
-Os testes de reprodução e da interface usam um mpv real e um servidor HTTP local que imita o Drive (exige o token e responde a requisições Range).
+The playback and interface tests use a real mpv and a local HTTP server that mimics Drive (it requires the token and answers Range requests).
 
-## Publicar uma versão
+## Releasing a version
 
-1. Suba o número em `src/nimbus/__init__.py` (`__version__`) e faça o merge no `main`.
-2. Crie e envie a tag: `git tag v0.3.0 && git push origin v0.3.0`.
+1. Bump the number in `src/nimbus/__init__.py` (`__version__`) and merge into `main`.
+2. Create and push the tag: `git tag v0.3.0 && git push origin v0.3.0`.
 
-O workflow `release` roda os testes, publica `nimbus-player` no PyPI, cria o GitHub Release com os pacotes e atualiza `Formula/nimbus.rb` no repositório [homebrew-tap](https://github.com/allanmedeiros71/homebrew-tap). A fórmula é gerada por `scripts/homebrew_formula.py`.
+The `release` workflow runs the tests, publishes `nimbus-player` to PyPI, creates the GitHub Release with the packages and updates `Formula/nimbus.rb` in the [homebrew-tap](https://github.com/allanmedeiros71/homebrew-tap) repository. The formula is generated by `scripts/homebrew_formula.py`.
 
-Configuração feita uma vez só:
-- PyPI: em pypi.org, *Your projects → Publishing → Add a new pending publisher* com projeto `nimbus-player`, dono `allanmedeiros71`, repositório `nimbus`, workflow `release.yml` e ambiente `pypi`.
-- Homebrew: crie o repositório público `allanmedeiros71/homebrew-tap` e um token fine-grained com permissão *Contents: read and write* só nele; salve como segredo `HOMEBREW_TAP_TOKEN` neste repositório. Sem o segredo, o workflow publica no PyPI e só avisa que pulou o Homebrew.
+One-time setup:
+- PyPI: on pypi.org, *Your projects → Publishing → Add a new pending publisher* with project `nimbus-player`, owner `allanmedeiros71`, repository `nimbus`, workflow `release.yml` and environment `pypi`.
+- Homebrew: create the public repository `allanmedeiros71/homebrew-tap` and a fine-grained token with *Contents: read and write* on it only; save it as the `HOMEBREW_TAP_TOKEN` secret in this repository. Without the secret, the workflow publishes to PyPI and only warns that it skipped Homebrew.
