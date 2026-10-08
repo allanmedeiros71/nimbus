@@ -133,7 +133,7 @@ Cada música resolvida fica salva em `~/.cache/nimbus/tracks.json`, pelo ID do a
 
 Capas e respostas ficam em cache em `~/.cache/nimbus`. A linha "dados: … · capa: …" no painel mostra de onde veio cada coisa.
 
-A capa é desenhada com blocos coloridos, o que funciona em qualquer terminal com cores. Em terminais com imagens de verdade dá para pedir mais resolução: `NIMBUS_COVER=iterm` (WezTerm, iTerm2), `NIMBUS_COVER=kitty` (kitty, Ghostty), `NIMBUS_COVER=sixel` (foot, Konsole) ou `NIMBUS_COVER=auto` para detectar (no WezTerm e no iTerm2 o `auto` escolhe `iterm`). Se aparecer lixo no lugar da capa, volte para o padrão (`NIMBUS_COVER=blocks`). `NIMBUS_COVER=off` esconde a capa. Para manter um modo, ponha a variável na configuração do shell, por exemplo `export NIMBUS_COVER=auto` no `~/.zshrc`. Dentro do tmux (3.3 ou mais novo), o modo `iterm` precisa de `set -g allow-passthrough on` no `~/.tmux.conf`.
+A capa é desenhada com blocos coloridos, o que funciona em qualquer terminal com cores. Em terminais com imagens de verdade dá para pedir mais resolução: `NIMBUS_COVER=iterm` (WezTerm, iTerm2), `NIMBUS_COVER=kitty` (kitty, Ghostty), `NIMBUS_COVER=sixel` (foot, Konsole) ou `NIMBUS_COVER=auto` para detectar (no WezTerm e no iTerm2 o `auto` escolhe `iterm`; no Ghostty e no kitty, `kitty`; dentro do tmux em outros terminais, `blocks`). Se aparecer lixo no lugar da capa, volte para o padrão (`NIMBUS_COVER=blocks`). `NIMBUS_COVER=off` esconde a capa. Para manter um modo, ponha a variável na configuração do shell, por exemplo `export NIMBUS_COVER=auto` no `~/.zshrc`. Dentro do tmux (3.3 ou mais novo), os modos `iterm` e `kitty` precisam de `set -g allow-passthrough on` no `~/.tmux.conf`.
 
 ## Linha de comando
 

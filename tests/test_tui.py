@@ -259,12 +259,19 @@ def test_cover_mode_defaults_to_blocks(monkeypatch):
     assert image_factory_from_env() is BlockImage
 
 
+def _clear_terminal_env(monkeypatch):
+    for var in ("TERM_PROGRAM", "TERM", "TMUX", "WEZTERM_PANE", "WEZTERM_EXECUTABLE", "LC_TERMINAL",
+                "GHOSTTY_RESOURCES_DIR", "KITTY_WINDOW_ID"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("NIMBUS_COVER", "auto")
+
+
 def test_cover_mode_iterm(monkeypatch):
     from nimbus.iterm import ITermImage
 
     monkeypatch.setenv("NIMBUS_COVER", "iterm")
     assert image_factory_from_env() is ITermImage
-    monkeypatch.setenv("NIMBUS_COVER", "auto")
+    _clear_terminal_env(monkeypatch)
     monkeypatch.setenv("TERM_PROGRAM", "WezTerm")
     assert image_factory_from_env() is ITermImage
 
@@ -292,9 +299,11 @@ def test_iterm_cover_draws_osc_1337(setup):
 def test_cover_mode_auto_inside_tmux(monkeypatch):
     from nimbus.iterm import ITermImage
 
-    for var in ("TERM_PROGRAM", "WEZTERM_PANE", "WEZTERM_EXECUTABLE", "LC_TERMINAL"):
-        monkeypatch.delenv(var, raising=False)
-    monkeypatch.setenv("NIMBUS_COVER", "auto")
+    import nimbus.tui as tui
+
+    _clear_terminal_env(monkeypatch)
+    monkeypatch.setattr(tui, "_tmux_client_terminal", lambda: ("", ""))
+    monkeypatch.setenv("TMUX", "/tmp/tmux-501/default,1,0")
     monkeypatch.setenv("TERM_PROGRAM", "tmux")
     monkeypatch.setenv("WEZTERM_PANE", "3")
     assert image_factory_from_env() is ITermImage
@@ -307,3 +316,61 @@ def test_tmux_passthrough_positions_the_image():
     assert seq.startswith("\x1bPtmux;") and seq.endswith("\x1b\\")
     inner = seq[len("\x1bPtmux;"):-2].replace("\x1b\x1b", "\x1b")
     assert inner == "\x1b7\x1b[3;41H\x1b]1337;File=inline=1:QUJD\x07\x1b8"
+
+
+def test_cover_mode_auto_in_ghostty(monkeypatch):
+    from textual_image.widget import TGPImage
+
+    _clear_terminal_env(monkeypatch)
+    monkeypatch.setenv("TERM_PROGRAM", "ghostty")
+    monkeypatch.setenv("TERM", "xterm-ghostty")
+    assert image_factory_from_env() is TGPImage
+
+
+def test_cover_mode_auto_ghostty_inside_tmux(monkeypatch):
+    import nimbus.tui as tui
+    from textual_image.widget import TGPImage
+
+    _clear_terminal_env(monkeypatch)
+    monkeypatch.setenv("TMUX", "/tmp/tmux-501/default,1,0")
+    monkeypatch.setenv("TERM_PROGRAM", "tmux")
+    monkeypatch.setenv("TERM", "tmux-256color")
+    # servidor do tmux aberto no WezTerm, mas quem está conectado agora é o Ghostty
+    monkeypatch.setenv("WEZTERM_PANE", "3")
+    monkeypatch.setattr(tui, "_tmux_client_terminal", lambda: ("xterm-256color", "ghostty 1.1.3"))
+    assert image_factory_from_env() is TGPImage
+
+    # o Alacritty não diz o nome ao tmux; o WEZTERM_PANE herdado não vale
+    monkeypatch.setattr(tui, "_tmux_client_terminal", lambda: ("xterm-256color", ""))
+    assert image_factory_from_env() is BlockImage
+
+
+def test_cover_mode_auto_ghostty_tmux_fallback_env(monkeypatch):
+    import nimbus.tui as tui
+    from textual_image.widget import TGPImage
+
+    _clear_terminal_env(monkeypatch)
+    monkeypatch.setenv("TMUX", "/tmp/tmux-501/default,1,0")
+    monkeypatch.setenv("TERM_PROGRAM", "tmux")
+    monkeypatch.setenv("GHOSTTY_RESOURCES_DIR", "/Applications/Ghostty.app/Contents/Resources/ghostty")
+    monkeypatch.setattr(tui, "_tmux_client_terminal", lambda: ("", ""))
+    assert image_factory_from_env() is TGPImage
+
+
+def test_cover_mode_auto_alacritty_inside_tmux_uses_blocks(monkeypatch):
+    import nimbus.tui as tui
+
+    _clear_terminal_env(monkeypatch)
+    monkeypatch.setenv("TMUX", "/tmp/tmux-501/default,1,0")
+    monkeypatch.setenv("TERM_PROGRAM", "tmux")
+    # servidor do tmux aberto no WezTerm/Ghostty, mas quem está conectado agora é o Alacritty
+    monkeypatch.setenv("WEZTERM_PANE", "3")
+    monkeypatch.setenv("GHOSTTY_RESOURCES_DIR", "/Applications/Ghostty.app/Contents/Resources/ghostty")
+    monkeypatch.setattr(tui, "_tmux_client_terminal", lambda: ("alacritty", ""))
+    assert image_factory_from_env() is BlockImage
+    monkeypatch.setattr(tui, "_tmux_client_terminal", lambda: ("xterm-256color", "alacritty 0.15.1"))
+    assert image_factory_from_env() is BlockImage
+    monkeypatch.setattr(tui, "_tmux_client_terminal", lambda: ("xterm-256color", "wezterm 20240203"))
+    from nimbus.iterm import ITermImage
+
+    assert image_factory_from_env() is ITermImage
