@@ -863,8 +863,8 @@ def _auto_cover_mode() -> str:
     Fora do tmux o TERM_PROGRAM/TERM bastam. Dentro, pergunta ao tmux qual
     terminal está conectado agora, porque as variáveis de ambiente
     (WEZTERM_PANE, GHOSTTY_RESOURCES_DIR...) vêm de quem abriu o servidor do
-    tmux e podem ser de outro terminal. Terminal conhecido sem imagens (como o
-    Alacritty) dentro do tmux fica nos blocos.
+    tmux e podem ser de outro terminal. Outro terminal dentro do tmux (como o
+    Alacritty) fica nos blocos.
     """
     env = os.environ
     if env.get("TERM_PROGRAM") == "ghostty" or env.get("TERM") in ("xterm-ghostty", "xterm-kitty"):
@@ -877,9 +877,11 @@ def _auto_cover_mode() -> str:
         return "kitty"
     if "wezterm" in client or "iterm" in client:
         return "iterm"
-    if kind or "alacritty" in client:
+    if name or kind:
+        # O tmux (3.3+) pergunta o nome ao terminal; Ghostty, kitty, WezTerm e
+        # iTerm2 respondem. Quem não responde (Alacritty) não desenha imagens.
         return "blocks"
-    # o terminal não disse quem é: resta o ambiente herdado
+    # não deu para perguntar ao tmux: resta o ambiente herdado
     if _iterm_terminal():
         return "iterm"
     if env.get("GHOSTTY_RESOURCES_DIR") or env.get("KITTY_WINDOW_ID"):

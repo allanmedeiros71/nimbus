@@ -340,10 +340,9 @@ def test_cover_mode_auto_ghostty_inside_tmux(monkeypatch):
     monkeypatch.setattr(tui, "_tmux_client_terminal", lambda: ("xterm-256color", "ghostty 1.1.3"))
     assert image_factory_from_env() is TGPImage
 
-    from nimbus.iterm import ITermImage
-
+    # o Alacritty não diz o nome ao tmux; o WEZTERM_PANE herdado não vale
     monkeypatch.setattr(tui, "_tmux_client_terminal", lambda: ("xterm-256color", ""))
-    assert image_factory_from_env() is ITermImage
+    assert image_factory_from_env() is BlockImage
 
 
 def test_cover_mode_auto_ghostty_tmux_fallback_env(monkeypatch):
