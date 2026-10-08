@@ -841,34 +841,50 @@ def _iterm_terminal() -> bool:
             or env.get("LC_TERMINAL") == "iTerm2")
 
 
-def _tmux_client_terminal() -> str:
-    """Terminal que está de fato conectado ao tmux: o TERM dele e, no tmux 3.3+,
-    o nome que ele informa (ex.: "xterm-ghostty ghostty 1.1.3")."""
+def _tmux_client_terminal() -> tuple[str, str]:
+    """Terminal que está de fato conectado ao tmux: o TERM dele e, quando o
+    terminal responde, o nome que ele informa (ex.: ("xterm-ghostty", "ghostty 1.1.3"))."""
     if not os.environ.get("TMUX"):
-        return ""
+        return "", ""
     try:
-        return subprocess.run(
-            ["tmux", "display-message", "-p", "#{client_termname} #{client_termtype}"],
+        out = subprocess.run(
+            ["tmux", "display-message", "-p", "#{client_termname}\t#{client_termtype}"],
             capture_output=True, text=True, timeout=1,
         ).stdout.strip().lower()
     except (OSError, subprocess.SubprocessError):
-        return ""
+        return "", ""
+    name, _, kind = out.partition("\t")
+    return name.strip(), kind.strip()
 
 
-def _kitty_terminal() -> bool:
-    """Ghostty ou kitty, também dentro do tmux.
+def _auto_cover_mode() -> str:
+    """O que NIMBUS_COVER=auto vira: kitty, iterm, blocks ou auto (o textual-image decide).
 
     Fora do tmux o TERM_PROGRAM/TERM bastam. Dentro, pergunta ao tmux qual
-    terminal está conectado agora; as variáveis GHOSTTY_*/KITTY_* só servem de
-    reserva, porque vêm de quem abriu o servidor do tmux.
+    terminal está conectado agora, porque as variáveis de ambiente
+    (WEZTERM_PANE, GHOSTTY_RESOURCES_DIR...) vêm de quem abriu o servidor do
+    tmux e podem ser de outro terminal. Terminal conhecido sem imagens (como o
+    Alacritty) dentro do tmux fica nos blocos.
     """
     env = os.environ
     if env.get("TERM_PROGRAM") == "ghostty" or env.get("TERM") in ("xterm-ghostty", "xterm-kitty"):
-        return True
-    client = _tmux_client_terminal()
-    if client:
-        return "ghostty" in client or "kitty" in client
-    return bool(env.get("GHOSTTY_RESOURCES_DIR") or env.get("KITTY_WINDOW_ID")) and not _iterm_terminal()
+        return "kitty"
+    if not env.get("TMUX"):
+        return "iterm" if _iterm_terminal() else "auto"
+    name, kind = _tmux_client_terminal()
+    client = f"{name} {kind}"
+    if "ghostty" in client or "kitty" in client:
+        return "kitty"
+    if "wezterm" in client or "iterm" in client:
+        return "iterm"
+    if kind or "alacritty" in client:
+        return "blocks"
+    # o terminal não disse quem é: resta o ambiente herdado
+    if _iterm_terminal():
+        return "iterm"
+    if env.get("GHOSTTY_RESOURCES_DIR") or env.get("KITTY_WINDOW_ID"):
+        return "kitty"
+    return "blocks"
 
 
 def image_factory_from_env() -> Optional[Callable]:
@@ -876,7 +892,7 @@ def image_factory_from_env() -> Optional[Callable]:
 
     blocks (padrão): meios-blocos coloridos, funciona em qualquer terminal.
     auto: no WezTerm e no iTerm2 usa o protocolo do iTerm2; no Ghostty e no
-          kitty, o protocolo do kitty; nos outros deixa o
+          kitty, o do kitty; no tmux com outro terminal, blocos; fora do tmux, nos outros deixa o
           textual-image escolher Sixel ou o protocolo do kitty, se o terminal
           disser que aceita. Alguns terminais dizem que aceitam e mostram
           lixo, por isso não é o padrão.
@@ -892,10 +908,12 @@ def image_factory_from_env() -> Optional[Callable]:
         return None
     if mode not in ("auto", "sixel", "kitty", "tgp", "iterm", "iterm2", "wezterm"):
         return BlockImage
-    if mode == "auto" and _kitty_terminal():
-        mode = "kitty"  # dentro do tmux o textual-image já embrulha no passthrough
-    elif mode == "auto" and _iterm_terminal():
-        mode = "iterm"  # o kitty do WezTerm não entende os caracteres de posição do textual-image
+    if mode == "auto":
+        # no WezTerm fica no iterm: o kitty dele não entende os caracteres de posição do
+        # textual-image; no tmux o textual-image já embrulha o kitty no passthrough
+        mode = _auto_cover_mode()
+        if mode == "blocks":
+            return BlockImage
     try:
         if mode in ("iterm", "iterm2", "wezterm"):
             from nimbus.iterm import ITermImage as ImageWidget
