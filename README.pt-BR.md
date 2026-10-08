@@ -9,7 +9,7 @@ Também toca as músicas do próprio computador: pasta pessoal, HD externo e pen
 ## Requisitos
 
 - Python 3.9 ou mais novo
-- [mpv](https://mpv.io): `brew install mpv` no macOS, `sudo apt install mpv` no Debian/Ubuntu
+- [mpv](https://mpv.io): `brew install mpv` no macOS, `sudo apt install mpv` no Debian/Ubuntu, `sudo pacman -S mpv` no Arch Linux
 
 Com a instalação pelo Homebrew, os dois já vêm junto.
 
@@ -30,6 +30,7 @@ O [pipx](https://pipx.pypa.io) cria um ambiente isolado para o nimbus e deixa o 
 ```sh
 brew install pipx          # macOS
 sudo apt install pipx      # Debian/Ubuntu
+sudo pacman -S python-pipx # Arch Linux
 pipx ensurepath            # coloca ~/.local/bin no PATH
 
 pipx install nimbus-player
@@ -40,6 +41,19 @@ Depois do `pipx ensurepath`, **abra um terminal novo** para o PATH valer. Para a
 Se você instalou uma versão antiga a partir do GitHub, troque pela do PyPI: `pipx uninstall nimbus && pipx install nimbus-player`.
 
 Para usar o código do repositório (versão em desenvolvimento): `git clone git@github.com:allanmedeiros71/nimbus.git` e `pipx install -e ./nimbus`. Com `-e`, um `git pull` dentro da pasta já atualiza o comando; só rode `pipx install -e --force ./nimbus` de novo se mudarem as dependências.
+
+### Arch Linux
+
+Ainda não existe pacote no AUR; use o pipx. O mpv e o pipx vêm dos repositórios oficiais, e as dependências Python (inclusive o Pillow) são instaladas como wheels prontos, então não é preciso compilador nem outros pacotes do sistema:
+
+```sh
+sudo pacman -S --needed mpv python-pipx
+pipx ensurepath
+# abra um terminal novo
+pipx install nimbus-player
+```
+
+Não use `sudo pip install` (o Arch bloqueia, e misturaria com o Python do sistema). Se você já usa o Homebrew no Linux, `brew install allanmedeiros71/tap/nimbus` também funciona.
 
 ### Alternativa para desenvolvimento: ambiente virtual
 
@@ -56,7 +70,7 @@ Nesse caso o comando `nimbus` só existe com o ambiente ativado: em cada termina
 
 - **`zsh: command not found: pip`**: no macOS com Homebrew e em Debian/Ubuntu recentes não existe `pip` solto e o Python do sistema não aceita pacotes. Use o pipx (acima) ou um ambiente virtual.
 - **`zsh: permissão negada: nimbus`** ou **`command not found: nimbus`** fora da pasta do projeto: o comando só estava instalado no venv. Confira com `type -a nimbus`; se não aparecer um caminho como `~/.local/bin/nimbus`, instale com o pipx, rode `pipx ensurepath` e abra um terminal novo.
-- **`mpv não encontrado`**: instale com `brew install mpv` ou `sudo apt install mpv`.
+- **`mpv não encontrado`**: instale com `brew install mpv`, `sudo apt install mpv` ou `sudo pacman -S mpv`.
 
 ## Credenciais do Google (uma vez só)
 
